@@ -1036,23 +1036,6 @@ function CaseCard({ item, stage, downloadable, onOpen, onDownload, showDoctor })
 --------------------------------------------------------------- */
 
 function StageHome({ user, index, onSelectStage }) {
-  const scope = index;
-
-  const statFor = (stage) => {
-    if (stage === "design") {
-      return { big: scope.length, label: "كل الحالات" };
-    }
-    const key = stage === "prova" ? "provaFilled" : "finalFilled";
-    const filledCount = scope.filter((c) => c[key]).length;
-    if (user.role === "admin") {
-      const pending = scope.length - filledCount;
-      return pending > 0
-        ? { big: pending, label: "محتاجة رفع", alert: true }
-        : { big: filledCount, label: "كلها مرفوعة" };
-    }
-    return { big: filledCount, label: "جاهزة" };
-  };
-
   return (
     <div dir="rtl" style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
       <h2 className="text-2xl text-[#22302E] mb-1" style={{ fontFamily: "'Markazi Text', serif", fontWeight: 600 }}>
@@ -1063,7 +1046,6 @@ function StageHome({ user, index, onSelectStage }) {
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {STAGES.map((s) => {
           const meta = STAGE_META[s];
-          const stat = statFor(s);
           return (
             <button
               key={s}
@@ -1071,21 +1053,12 @@ function StageHome({ user, index, onSelectStage }) {
               className="aspect-square rounded-2xl flex flex-col items-center justify-center text-center p-3 transition-transform hover:-translate-y-1 relative overflow-hidden"
               style={{ background: meta.color, boxShadow: "0 10px 24px -10px rgba(0,0,0,0.35)" }}
             >
-              {stat.alert && (
-                <span className="absolute top-2.5 left-2.5 w-2.5 h-2.5 rounded-full bg-[#EDD9B4] animate-pulse" />
-              )}
-              {user.role === "admin" && (
-                <span className="text-3xl sm:text-4xl font-bold text-white" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                  {stat.big}
-                </span>
-              )}
               <span
-                className={`text-white text-lg sm:text-xl font-semibold tracking-wide ${user.role === "admin" ? "mt-2" : ""}`}
+                className="text-white text-lg sm:text-xl font-semibold tracking-wide"
                 style={{ fontFamily: "'IBM Plex Mono', monospace" }}
               >
                 {meta.labelEn}
               </span>
-              {user.role === "admin" && <span className="text-white/70 text-[11px] mt-0.5">{stat.label}</span>}
             </button>
           );
         })}
@@ -1098,14 +1071,36 @@ function StageHome({ user, index, onSelectStage }) {
    ليستة حالات مرحلة معيّنة
 --------------------------------------------------------------- */
 
-function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase, onDownload, search, setSearch, sortMode, setSortMode }) {
+function StageList({
+  user,
+  stage,
+  index,
+  loading,
+  onBack,
+  onOpenCase,
+  onNewCase,
+  onDownload,
+  onLoadStage,
+  search,
+  setSearch,
+  sortMode,
+  setSortMode,
+}) {
   const meta = STAGE_META[stage];
+  const [month, setMonth] = useState(""); // 'YYYY-MM' or ''
+  const [totalCrowns, setTotalCrowns] = useState(0);
+  const [crownsLoading, setCrownsLoading] = useState(false);
+
+  const searchActive = user.role === "admin" && stage === "final" && search.trim();
 
   const visibleCases = useMemo(() => {
     let list = index;
-    if (user.role === "admin" && search.trim()) {
+    if (searchActive) {
       const q = search.trim();
       list = list.filter((c) => c.doctorName.includes(q));
+      if (month) {
+        list = list.filter((c) => (c.createdAt || "").slice(0, 7) === month);
+      }
     }
     const sorted = [...list].sort((a, b) => {
       if (sortMode === "done") {
@@ -1115,7 +1110,26 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
     return sorted;
-  }, [index, user.role, search, sortMode]);
+  }, [index, searchActive, search, month, sortMode]);
+
+  useEffect(() => {
+    if (!searchActive) {
+      setTotalCrowns(0);
+      return;
+    }
+    let cancelled = false;
+    setCrownsLoading(true);
+    Promise.all(visibleCases.map((c) => onLoadStage(c.id, "final"))).then((records) => {
+      if (cancelled) return;
+      const sum = records.reduce((acc, r) => acc + (r?.crownCount || 0), 0);
+      setTotalCrowns(sum);
+      setCrownsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchActive, visibleCases, onLoadStage]);
 
   return (
     <div dir="rtl" style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
@@ -1139,7 +1153,7 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
         </button>
       </div>
 
-      {user.role === "admin" && (
+      {user.role === "admin" && stage === "final" && (
         <div className="flex flex-wrap items-center gap-3 mb-5">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute right-3 top-2.5 text-[#9AA29F]" />
@@ -1150,6 +1164,12 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
               className="w-full rounded-lg border border-[#E4E0D8] pr-9 pl-3 py-2 text-sm outline-none focus:border-[#1F5C57] bg-white"
             />
           </div>
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="rounded-lg border border-[#E4E0D8] bg-white px-3 py-2 text-sm outline-none focus:border-[#1F5C57]"
+          />
           <div className="relative">
             <select
               value={sortMode}
@@ -1164,13 +1184,16 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
         </div>
       )}
 
-      {user.role === "admin" && search.trim() && !loading && (
+      {searchActive && !loading && (
         <div
           className="flex items-center gap-2 rounded-lg px-4 py-2.5 mb-4 text-sm font-semibold"
           style={{ background: "#E7F0EE", color: "#1F5C57" }}
         >
           <UserRound size={15} />
-          {search.trim()} — إجمالي {visibleCases.length} حالة
+          {search.trim()}
+          {month && ` — ${month}`} — إجمالي{" "}
+          {crownsLoading ? <Loader2 size={13} className="animate-spin inline" /> : totalCrowns} كراون ({visibleCases.length}{" "}
+          حالة)
         </div>
       )}
 
@@ -1428,6 +1451,7 @@ function Dashboard({ user, onLogout }) {
             onOpenCase={openCase}
             onNewCase={() => setShowNewCase(true)}
             onDownload={downloadFile}
+            onLoadStage={loadStage}
             search={search}
             setSearch={setSearch}
             sortMode={sortMode}
