@@ -18,6 +18,7 @@ import {
   Building2,
   ClipboardList,
   ChevronDown,
+  Trash2,
 } from "lucide-react";
 
 /* ---------------------------------------------------------------
@@ -356,7 +357,7 @@ function DataRow({ label, value }) {
   );
 }
 
-function FilePreviewCard({ record }) {
+function FilePreviewCard({ record, onDelete, deleting }) {
   const [downloading, setDownloading] = useState(false);
   if (!record) return null;
 
@@ -376,13 +377,24 @@ function FilePreviewCard({ record }) {
         <FileText size={16} color="#6B7674" />
         <span className="text-xs text-[#22302E] truncate max-w-[140px]">{record.fileName}</span>
       </div>
-      <button
-        onClick={handleDownload}
-        disabled={downloading}
-        className="flex items-center gap-1 text-xs font-semibold text-[#1F5C57] hover:opacity-70 disabled:opacity-50"
-      >
-        {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} تحميل
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="flex items-center gap-1 text-xs font-semibold text-[#1F5C57] hover:opacity-70 disabled:opacity-50"
+        >
+          {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} تحميل
+        </button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            className="flex items-center gap-1 text-xs font-semibold text-[#B1503F] hover:opacity-70 disabled:opacity-50"
+          >
+            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -729,10 +741,14 @@ function AdminNewCaseForm({ onCreated, onClose }) {
    تفاصيل الحالة
 --------------------------------------------------------------- */
 
-function CaseDetail({ caseItem, role, initialStage, onBack, onLoadStage, onSaveStage, onToggleDone }) {
+function CaseDetail({ caseItem, user, initialStage, onBack, onLoadStage, onSaveStage, onToggleDone, onDeleteCase, onDeleteStageFile }) {
+  const role = user.role;
+  const canManage = role === "admin" || caseItem.uploadedBy === user.id;
   const [activeStage, setActiveStage] = useState(initialStage || "design");
   const [stageData, setStageData] = useState({ design: null, prova: null, final: null });
   const [loading, setLoading] = useState(true);
+  const [deletingCase, setDeletingCase] = useState(false);
+  const [deletingFile, setDeletingFile] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -760,6 +776,27 @@ function CaseDetail({ caseItem, role, initialStage, onBack, onLoadStage, onSaveS
     await loadAll();
   };
 
+  const handleDeleteCase = async () => {
+    if (!window.confirm("متأكد إنك عايز تمسح الحالة دي بكل مراحلها؟ الإجراء ده مش قابل للتراجع.")) return;
+    setDeletingCase(true);
+    try {
+      await onDeleteCase(caseItem.id);
+    } finally {
+      setDeletingCase(false);
+    }
+  };
+
+  const handleDeleteFile = async (stage) => {
+    if (!window.confirm("متأكد إنك عايز تمسح ملف المرحلة دي؟")) return;
+    setDeletingFile(true);
+    try {
+      await onDeleteStageFile(caseItem.id, stage);
+      await loadAll();
+    } finally {
+      setDeletingFile(false);
+    }
+  };
+
   return (
     <div dir="rtl" style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
       <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-[#6B7674] mb-4 hover:text-[#22302E]">
@@ -778,28 +815,40 @@ function CaseDetail({ caseItem, role, initialStage, onBack, onLoadStage, onSaveS
           </p>
         </div>
 
-        {role === "admin" ? (
-          <button
-            onClick={() => onToggleDone(caseItem.id, !caseItem.done)}
-            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors"
-            style={{
-              borderColor: caseItem.done ? "#3F7A56" : "#E4E0D8",
-              color: caseItem.done ? "#3F7A56" : "#6B7674",
-              background: caseItem.done ? "#E7F2EA" : "#fff",
-            }}
-          >
-            <CheckCircle2 size={14} /> {caseItem.done ? "تمت الحالة" : "علّم كـ تمت"}
-          </button>
-        ) : (
-          caseItem.done && (
-            <span
-              className="text-xs font-bold px-3 py-1.5 rounded-full border-2"
-              style={{ color: "#3F7A56", borderColor: "#3F7A56", transform: "rotate(-3deg)" }}
+        <div className="flex items-center gap-2">
+          {role === "admin" ? (
+            <button
+              onClick={() => onToggleDone(caseItem.id, !caseItem.done)}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors"
+              style={{
+                borderColor: caseItem.done ? "#3F7A56" : "#E4E0D8",
+                color: caseItem.done ? "#3F7A56" : "#6B7674",
+                background: caseItem.done ? "#E7F2EA" : "#fff",
+              }}
             >
-              ✓ تمت
-            </span>
-          )
-        )}
+              <CheckCircle2 size={14} /> {caseItem.done ? "تمت الحالة" : "علّم كـ تمت"}
+            </button>
+          ) : (
+            caseItem.done && (
+              <span
+                className="text-xs font-bold px-3 py-1.5 rounded-full border-2"
+                style={{ color: "#3F7A56", borderColor: "#3F7A56", transform: "rotate(-3deg)" }}
+              >
+                ✓ تمت
+              </span>
+            )
+          )}
+          {canManage && (
+            <button
+              onClick={handleDeleteCase}
+              disabled={deletingCase}
+              title="امسح الحالة كلها"
+              className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold border border-[#E4E0D8] text-[#B1503F] hover:bg-[#FBEDEA] disabled:opacity-50"
+            >
+              {deletingCase ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+            </button>
+          )}
+        </div>
       </div>
 
       <StageFan active={activeStage} onSelect={setActiveStage} status={status} />
@@ -824,7 +873,11 @@ function CaseDetail({ caseItem, role, initialStage, onBack, onLoadStage, onSaveS
                 {stageData.design.shade && <DataRow label="Shade" value={stageData.design.shade} />}
                 {stageData.design.note && <DataRow label="Note" value={stageData.design.note} />}
                 <DataRow label="تاريخ الرفع" value={formatDate(stageData.design.uploadedAt)} />
-                <FilePreviewCard record={stageData.design} />
+                <FilePreviewCard
+                  record={stageData.design}
+                  deleting={deletingFile}
+                  onDelete={canManage ? () => handleDeleteFile("design") : undefined}
+                />
               </>
             ) : (
               <EmptyState text="لسه معملش رفع ملف الديزاين" />
@@ -843,7 +896,11 @@ function CaseDetail({ caseItem, role, initialStage, onBack, onLoadStage, onSaveS
                 <DataRow label="Shade" value={stageData[activeStage].shade} />
                 {stageData[activeStage].note && <DataRow label="Note" value={stageData[activeStage].note} />}
                 <DataRow label="تاريخ الرفع" value={formatDate(stageData[activeStage].uploadedAt)} />
-                <FilePreviewCard record={stageData[activeStage]} />
+                <FilePreviewCard
+                  record={stageData[activeStage]}
+                  deleting={deletingFile}
+                  onDelete={canManage ? () => handleDeleteFile(activeStage) : undefined}
+                />
               </>
             ) : role === "admin" ? (
               <AdminUploadForm stage={activeStage} caseItem={caseItem} onDone={handleAdminUpload} />
@@ -1201,6 +1258,7 @@ function Dashboard({ user, onLogout }) {
       shade: data.shade,
       note: data.note,
       fileName: data.file_name,
+      filePath: data.file_path,
       fileUrl: getFileUrl(data.file_path),
       uploadedAt: data.uploaded_at,
     };
@@ -1242,6 +1300,42 @@ function Dashboard({ user, onLogout }) {
       await loadIndex();
     },
     [loadIndex]
+  );
+
+  const deleteStageFile = useCallback(
+    async (caseId, stage) => {
+      const record = await loadStage(caseId, stage);
+      if (record?.filePath) {
+        await supabase.storage.from(CASE_FILES_BUCKET).remove([record.filePath]);
+      }
+      await supabase.from("case_stage_files").delete().eq("case_id", caseId).eq("stage", stage);
+
+      const updateFields = stage === "prova" ? { prova_filled: false } : stage === "final" ? { final_filled: false } : {};
+      if (Object.keys(updateFields).length) {
+        await supabase.from("cases").update(updateFields).eq("id", caseId);
+      }
+      await loadIndex();
+    },
+    [loadStage, loadIndex]
+  );
+
+  const deleteCase = useCallback(
+    async (caseId) => {
+      const [design, prova, final] = await Promise.all([
+        loadStage(caseId, "design"),
+        loadStage(caseId, "prova"),
+        loadStage(caseId, "final"),
+      ]);
+      const paths = [design, prova, final].filter((r) => r?.filePath).map((r) => r.filePath);
+      if (paths.length) {
+        await supabase.storage.from(CASE_FILES_BUCKET).remove(paths);
+      }
+      await supabase.from("cases").delete().eq("id", caseId);
+      await loadIndex();
+      setSelectedId(null);
+      setScreen("stage");
+    },
+    [loadStage, loadIndex]
   );
 
   const toggleDone = async (caseId, done) => {
@@ -1345,12 +1439,14 @@ function Dashboard({ user, onLogout }) {
         {screen === "detail" && selected && (
           <CaseDetail
             caseItem={selected}
-            role={user.role}
+            user={user}
             initialStage={activeStage}
             onBack={() => setScreen("stage")}
             onLoadStage={loadStage}
             onSaveStage={saveStage}
             onToggleDone={toggleDone}
+            onDeleteCase={deleteCase}
+            onDeleteStageFile={deleteStageFile}
           />
         )}
       </div>
