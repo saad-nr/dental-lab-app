@@ -300,49 +300,6 @@ function LoginScreen() {
 }
 
 /* ---------------------------------------------------------------
-   شرائح المراحل (Signature element)
---------------------------------------------------------------- */
-
-function StageFan({ active, onSelect, status }) {
-  // status: {design:'filled', prova:'filled'|'empty', final:'filled'|'empty'}
-  return (
-    <div className="flex items-end gap-0 mb-6">
-      {STAGES.map((s, i) => {
-        const meta = STAGE_META[s];
-        const isActive = active === s;
-        const filled = status[s] === "filled";
-        return (
-          <button
-            key={s}
-            onClick={() => onSelect(s)}
-            className="relative px-6 pt-3 pb-3 rounded-t-xl text-sm font-semibold transition-all"
-            style={{
-              background: isActive ? meta.color : meta.tint,
-              color: isActive ? "#fff" : meta.color,
-              marginInlineEnd: i < 2 ? "-10px" : 0,
-              transform: isActive ? "translateY(0px)" : `translateY(6px) rotate(${(i - 1) * 1.5}deg)`,
-              zIndex: isActive ? 10 : 3 - i,
-              boxShadow: isActive ? "0 8px 20px -6px rgba(0,0,0,0.25)" : "0 2px 6px rgba(0,0,0,0.06)",
-              fontFamily: "'IBM Plex Sans Arabic', sans-serif",
-            }}
-          >
-            <div className="flex items-center gap-1.5">
-              {filled ? (
-                <CheckCircle2 size={14} color={isActive ? "#fff" : meta.color} />
-              ) : (
-                <Circle size={14} color={isActive ? "#fff" : "#B9BCB9"} />
-              )}
-              {meta.label}
-            </div>
-            <div className="text-[10px] opacity-80 mt-0.5">{meta.sub}</div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------
    عناصر عرض بيانات
 --------------------------------------------------------------- */
 
@@ -741,57 +698,50 @@ function AdminNewCaseForm({ onCreated, onClose }) {
    تفاصيل الحالة
 --------------------------------------------------------------- */
 
-function CaseDetail({ caseItem, user, initialStage, onBack, onLoadStage, onSaveStage, onToggleDone, onDeleteCase, onDeleteStageFile }) {
+function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggleDone, onDeleteCase, onDeleteStageFile }) {
   const role = user.role;
+  const stage = caseItem.stage;
+  const meta = STAGE_META[stage];
   const canManage = role === "admin" || caseItem.uploadedBy === user.id;
-  const [activeStage, setActiveStage] = useState(initialStage || "design");
-  const [stageData, setStageData] = useState({ design: null, prova: null, final: null });
+  const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
   const [deletingCase, setDeletingCase] = useState(false);
   const [deletingFile, setDeletingFile] = useState(false);
 
-  const loadAll = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    const [d, p, f] = await Promise.all([
-      onLoadStage(caseItem.id, "design"),
-      onLoadStage(caseItem.id, "prova"),
-      onLoadStage(caseItem.id, "final"),
-    ]);
-    setStageData({ design: d, prova: p, final: f });
+    const r = await onLoadStage(caseItem.id, stage);
+    setRecord(r);
     setLoading(false);
-  }, [caseItem.id, onLoadStage]);
+  }, [caseItem.id, stage, onLoadStage]);
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    load();
+  }, [load]);
 
-  const status = {
-    design: stageData.design ? "filled" : "empty",
-    prova: stageData.prova ? "filled" : "empty",
-    final: stageData.final ? "filled" : "empty",
-  };
-
-  const handleAdminUpload = async (record) => {
-    await onSaveStage(caseItem.id, activeStage, record);
-    await loadAll();
+  const handleAdminUpload = async (rec) => {
+    await onSaveStage(caseItem.id, stage, rec);
+    setEditing(false);
+    await load();
   };
 
   const handleDeleteCase = async () => {
-    if (!window.confirm("متأكد إنك عايز تمسح الحالة دي بكل مراحلها؟ الإجراء ده مش قابل للتراجع.")) return;
+    if (!window.confirm("متأكد إنك عايز تمسح الحالة دي؟ الإجراء ده مش قابل للتراجع.")) return;
     setDeletingCase(true);
     try {
-      await onDeleteCase(caseItem.id);
+      await onDeleteCase(caseItem.id, stage);
     } finally {
       setDeletingCase(false);
     }
   };
 
-  const handleDeleteFile = async (stage) => {
-    if (!window.confirm("متأكد إنك عايز تمسح ملف المرحلة دي؟")) return;
+  const handleDeleteFile = async () => {
+    if (!window.confirm("متأكد إنك عايز تمسح الملف؟")) return;
     setDeletingFile(true);
     try {
       await onDeleteStageFile(caseItem.id, stage);
-      await loadAll();
+      await load();
     } finally {
       setDeletingFile(false);
     }
@@ -805,7 +755,13 @@ function CaseDetail({ caseItem, user, initialStage, onBack, onLoadStage, onSaveS
 
       <div className="flex items-start justify-between mb-1">
         <div>
-          <h2 className="text-2xl text-[#22302E]" style={{ fontFamily: "'Markazi Text', serif", fontWeight: 600 }}>
+          <span
+            className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+            style={{ color: meta.color, background: meta.tint }}
+          >
+            {meta.labelEn}
+          </span>
+          <h2 className="text-2xl text-[#22302E] mt-1" style={{ fontFamily: "'Markazi Text', serif", fontWeight: 600 }}>
             {caseItem.caseName}
           </h2>
           <p className="text-sm text-[#6B7674] flex items-center gap-1.5 mt-1">
@@ -842,7 +798,7 @@ function CaseDetail({ caseItem, user, initialStage, onBack, onLoadStage, onSaveS
             <button
               onClick={handleDeleteCase}
               disabled={deletingCase}
-              title="امسح الحالة كلها"
+              title="امسح الحالة"
               className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold border border-[#E4E0D8] text-[#B1503F] hover:bg-[#FBEDEA] disabled:opacity-50"
             >
               {deletingCase ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
@@ -851,63 +807,35 @@ function CaseDetail({ caseItem, user, initialStage, onBack, onLoadStage, onSaveS
         </div>
       </div>
 
-      <StageFan active={activeStage} onSelect={setActiveStage} status={status} />
-
-      <div className="rounded-2xl bg-white border border-[#EFEBE2] p-5 min-h-[220px]">
+      <div className="rounded-2xl bg-white border border-[#EFEBE2] p-5 min-h-[220px] mt-4">
         {loading ? (
           <div className="flex items-center justify-center h-40 text-[#9AA29F]">
             <Loader2 className="animate-spin" size={20} />
           </div>
-        ) : activeStage === "design" ? (
+        ) : editing ? (
+          <AdminUploadForm stage={stage} caseItem={caseItem} onDone={handleAdminUpload} />
+        ) : record ? (
           <div>
-            <p className="text-xs font-semibold mb-3" style={{ color: STAGE_META.design.color }}>
-              بيانات مرحلة الديزاين
-            </p>
-            {stageData.design ? (
-              <>
-                <DataRow label="Doctor" value={stageData.design.doctorName} />
-                <DataRow label="Patient" value={stageData.design.caseName} />
-                {stageData.design.crownCount != null && (
-                  <DataRow label="N.O.C." value={stageData.design.crownCount} />
-                )}
-                {stageData.design.shade && <DataRow label="Shade" value={stageData.design.shade} />}
-                {stageData.design.note && <DataRow label="Note" value={stageData.design.note} />}
-                <DataRow label="تاريخ الرفع" value={formatDate(stageData.design.uploadedAt)} />
-                <FilePreviewCard
-                  record={stageData.design}
-                  deleting={deletingFile}
-                  onDelete={canManage ? () => handleDeleteFile("design") : undefined}
-                />
-              </>
-            ) : (
-              <EmptyState text="لسه معملش رفع ملف الديزاين" />
-            )}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold" style={{ color: meta.color }}>
+                بيانات {meta.label}
+              </p>
+              {role === "admin" && (
+                <button onClick={() => setEditing(true)} className="text-xs font-semibold text-[#1F5C57] hover:opacity-70">
+                  تعديل
+                </button>
+              )}
+            </div>
+            <DataRow label="Doctor" value={record.doctorName} />
+            <DataRow label="Patient" value={record.caseName} />
+            {record.crownCount != null && <DataRow label="N.O.C." value={record.crownCount} />}
+            {record.shade && <DataRow label="Shade" value={record.shade} />}
+            {record.note && <DataRow label="Note" value={record.note} />}
+            <DataRow label="تاريخ الرفع" value={formatDate(record.uploadedAt)} />
+            <FilePreviewCard record={record} deleting={deletingFile} onDelete={canManage ? handleDeleteFile : undefined} />
           </div>
         ) : (
-          <div>
-            <p className="text-xs font-semibold mb-3" style={{ color: STAGE_META[activeStage].color }}>
-              بيانات مرحلة {STAGE_META[activeStage].label} — من المعمل
-            </p>
-            {stageData[activeStage] ? (
-              <>
-                <DataRow label="Doctor" value={stageData[activeStage].doctorName} />
-                <DataRow label="Patient" value={stageData[activeStage].caseName} />
-                <DataRow label="N.O.C." value={stageData[activeStage].crownCount} />
-                <DataRow label="Shade" value={stageData[activeStage].shade} />
-                {stageData[activeStage].note && <DataRow label="Note" value={stageData[activeStage].note} />}
-                <DataRow label="تاريخ الرفع" value={formatDate(stageData[activeStage].uploadedAt)} />
-                <FilePreviewCard
-                  record={stageData[activeStage]}
-                  deleting={deletingFile}
-                  onDelete={canManage ? () => handleDeleteFile(activeStage) : undefined}
-                />
-              </>
-            ) : role === "admin" ? (
-              <AdminUploadForm stage={activeStage} caseItem={caseItem} onDone={handleAdminUpload} />
-            ) : (
-              <EmptyState text={`المعمل لسه ماعملش مرحلة ${STAGE_META[activeStage].label}`} />
-            )}
-          </div>
+          <EmptyState text="مفيش ملف مرفوع للحالة دي" />
         )}
       </div>
     </div>
@@ -962,16 +890,16 @@ function FileDropZone({ file, onSelect, placeholder = "Choose or drop a file" })
    كارت حالة فى الليستة
 --------------------------------------------------------------- */
 
-function CaseCard({ item, stage, downloadable, onOpen, onDownload, showDoctor }) {
-  const filled = { design: true, prova: !!item.provaFilled, final: !!item.finalFilled };
+function CaseCard({ item, onOpen, onDownload, showDoctor }) {
+  const meta = STAGE_META[item.stage];
   const [downloading, setDownloading] = useState(false);
 
   const handleDownload = async (e) => {
     e.stopPropagation();
-    if (downloading || !downloadable) return;
+    if (downloading) return;
     setDownloading(true);
     try {
-      await onDownload(item.id, stage);
+      await onDownload(item.id, item.stage);
     } finally {
       setDownloading(false);
     }
@@ -992,19 +920,12 @@ function CaseCard({ item, stage, downloadable, onOpen, onDownload, showDoctor })
         </span>
       )}
       <div className="flex items-center gap-1.5 mb-1.5">
-        {STAGES.map((s) => (
-          <span
-            key={s}
-            className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-            style={{
-              color: filled[s] ? STAGE_META[s].color : "#B9BCB9",
-              background: filled[s] ? STAGE_META[s].tint : "#F3F1EC",
-            }}
-          >
-            {filled[s] ? <CheckCircle2 size={10} /> : <Circle size={10} />}
-            {STAGE_META[s].label}
-          </span>
-        ))}
+        <span
+          className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+          style={{ color: meta.color, background: meta.tint }}
+        >
+          {meta.labelEn}
+        </span>
       </div>
       <p className="text-base text-[#22302E] font-semibold mb-1">{item.caseName}</p>
       {showDoctor && (
@@ -1018,10 +939,10 @@ function CaseCard({ item, stage, downloadable, onOpen, onDownload, showDoctor })
         </p>
         <button
           onClick={handleDownload}
-          disabled={!downloadable || downloading}
-          title={downloadable ? "Download" : "No file yet"}
+          disabled={downloading}
+          title="Download"
           className="flex items-center gap-1 text-xs font-semibold rounded-md px-2 py-1 disabled:opacity-30 disabled:cursor-not-allowed"
-          style={{ color: "#1F5C57", background: downloadable ? "#E7F0EE" : "transparent" }}
+          style={{ color: "#1F5C57", background: "#E7F0EE" }}
         >
           {downloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
           Download
@@ -1094,7 +1015,7 @@ function StageList({
   const searchActive = user.role === "admin" && stage === "final" && search.trim();
 
   const visibleCases = useMemo(() => {
-    let list = index;
+    let list = index.filter((c) => c.stage === stage);
     if (searchActive) {
       const q = search.trim();
       list = list.filter((c) => c.doctorName.includes(q));
@@ -1110,7 +1031,7 @@ function StageList({
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
     return sorted;
-  }, [index, searchActive, search, month, sortMode]);
+  }, [index, stage, searchActive, search, month, sortMode]);
 
   useEffect(() => {
     if (!searchActive) {
@@ -1211,15 +1132,7 @@ function StageList({
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
           {visibleCases.map((c) => (
-            <CaseCard
-              key={c.id}
-              item={c}
-              stage={stage}
-              downloadable={stage === "design" ? true : stage === "prova" ? !!c.provaFilled : !!c.finalFilled}
-              onOpen={() => onOpenCase(c.id)}
-              onDownload={onDownload}
-              showDoctor
-            />
+            <CaseCard key={c.id} item={c} onOpen={() => onOpenCase(c.id)} onDownload={onDownload} showDoctor />
           ))}
         </div>
       )}
@@ -1248,13 +1161,12 @@ function Dashboard({ user, onLogout }) {
       setIndex(
         data.map((c) => ({
           id: c.id,
+          stage: c.stage,
           doctorName: c.doctor_name,
           caseName: c.case_name,
           uploadedBy: c.uploaded_by,
           createdAt: c.created_at,
           done: c.done,
-          provaFilled: c.prova_filled,
-          finalFilled: c.final_filled,
         }))
       );
     }
@@ -1297,7 +1209,7 @@ function Dashboard({ user, onLogout }) {
 
   const saveStage = useCallback(
     async (caseId, stage, record) => {
-      const filePath = await uploadCaseFile(caseId, stage, record.file);
+      const filePath = record.file ? await uploadCaseFile(caseId, stage, record.file) : record.filePath;
       const { error } = await supabase.from("case_stage_files").upsert(
         {
           case_id: caseId,
@@ -1314,11 +1226,6 @@ function Dashboard({ user, onLogout }) {
         { onConflict: "case_id,stage" }
       );
       if (error) throw error;
-
-      const updateFields = stage === "prova" ? { prova_filled: true } : stage === "final" ? { final_filled: true } : {};
-      if (Object.keys(updateFields).length) {
-        await supabase.from("cases").update(updateFields).eq("id", caseId);
-      }
       await loadIndex();
     },
     [loadIndex]
@@ -1331,26 +1238,16 @@ function Dashboard({ user, onLogout }) {
         await supabase.storage.from(CASE_FILES_BUCKET).remove([record.filePath]);
       }
       await supabase.from("case_stage_files").delete().eq("case_id", caseId).eq("stage", stage);
-
-      const updateFields = stage === "prova" ? { prova_filled: false } : stage === "final" ? { final_filled: false } : {};
-      if (Object.keys(updateFields).length) {
-        await supabase.from("cases").update(updateFields).eq("id", caseId);
-      }
       await loadIndex();
     },
     [loadStage, loadIndex]
   );
 
   const deleteCase = useCallback(
-    async (caseId) => {
-      const [design, prova, final] = await Promise.all([
-        loadStage(caseId, "design"),
-        loadStage(caseId, "prova"),
-        loadStage(caseId, "final"),
-      ]);
-      const paths = [design, prova, final].filter((r) => r?.filePath).map((r) => r.filePath);
-      if (paths.length) {
-        await supabase.storage.from(CASE_FILES_BUCKET).remove(paths);
+    async (caseId, stage) => {
+      const record = await loadStage(caseId, stage);
+      if (record?.filePath) {
+        await supabase.storage.from(CASE_FILES_BUCKET).remove([record.filePath]);
       }
       await supabase.from("cases").delete().eq("id", caseId);
       await loadIndex();
@@ -1372,18 +1269,17 @@ function Dashboard({ user, onLogout }) {
         doctor_name: doctorName,
         case_name: caseName,
         uploaded_by: user.id,
+        stage: activeStage,
         done: false,
-        prova_filled: false,
-        final_filled: false,
       })
       .select()
       .single();
     if (caseError) throw caseError;
 
-    const filePath = await uploadCaseFile(newCase.id, "design", file);
+    const filePath = await uploadCaseFile(newCase.id, activeStage, file);
     const { error: fileError } = await supabase.from("case_stage_files").insert({
       case_id: newCase.id,
-      stage: "design",
+      stage: activeStage,
       doctor_name: doctorName,
       case_name: caseName,
       crown_count: crownCount != null ? crownCount : null,
@@ -1463,7 +1359,6 @@ function Dashboard({ user, onLogout }) {
           <CaseDetail
             caseItem={selected}
             user={user}
-            initialStage={activeStage}
             onBack={() => setScreen("stage")}
             onLoadStage={loadStage}
             onSaveStage={saveStage}
