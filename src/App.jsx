@@ -1036,7 +1036,7 @@ function CaseCard({ item, stage, downloadable, onOpen, onDownload, showDoctor })
 --------------------------------------------------------------- */
 
 function StageHome({ user, index, onSelectStage }) {
-  const scope = user.role === "admin" ? index : index.filter((c) => c.uploadedBy === user.id);
+  const scope = index;
 
   const statFor = (stage) => {
     if (stage === "design") {
@@ -1100,10 +1100,9 @@ function StageHome({ user, index, onSelectStage }) {
 
 function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase, onDownload, search, setSearch, sortMode, setSortMode }) {
   const meta = STAGE_META[stage];
-  const myCases = useMemo(() => index.filter((c) => c.uploadedBy === user.id), [index, user.id]);
 
   const visibleCases = useMemo(() => {
-    let list = user.role === "admin" ? index : myCases;
+    let list = index;
     if (user.role === "admin" && search.trim()) {
       const q = search.trim();
       list = list.filter((c) => c.doctorName.includes(q));
@@ -1116,7 +1115,7 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
     return sorted;
-  }, [index, myCases, user.role, search, sortMode]);
+  }, [index, user.role, search, sortMode]);
 
   return (
     <div dir="rtl" style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
