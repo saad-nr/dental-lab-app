@@ -55,9 +55,9 @@ function formatDate(iso) {
   }
 }
 
-async function uploadCaseFile(caseId, stage, file) {
+async function uploadCaseFile(caseId, stage, file, idx = 0) {
   const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-  const path = `${caseId}/${stage}/${Date.now()}_${safeName}`;
+  const path = `${caseId}/${stage}/${Date.now()}_${idx}_${safeName}`;
   const { error } = await supabase.storage.from(CASE_FILES_BUCKET).upload(path, file, {
     upsert: true,
   });
@@ -360,25 +360,29 @@ function FilePreviewCard({ record, onDelete, deleting }) {
    فورم رفع من الأدمن (بروفا / فاينال)
 --------------------------------------------------------------- */
 
-function AdminUploadForm({ stage, caseItem, onDone }) {
+function AdminUploadForm({ stage, caseItem, initial, onDone }) {
   const meta = STAGE_META[stage];
-  const [doctorName, setDoctorName] = useState(caseItem.doctorName);
-  const [caseName, setCaseName] = useState(caseItem.caseName);
-  const [crownCount, setCrownCount] = useState("");
-  const [shade, setShade] = useState(SHADES[0]);
-  const [note, setNote] = useState("");
-  const [file, setFile] = useState(null);
+  const [doctorName, setDoctorName] = useState(initial?.doctorName ?? caseItem.doctorName);
+  const [caseName, setCaseName] = useState(initial?.caseName ?? caseItem.caseName);
+  const [crownCount, setCrownCount] = useState(initial?.crownCount != null ? String(initial.crownCount) : "");
+  const [shade, setShade] = useState(initial?.shade || SHADES[0]);
+  const [note, setNote] = useState(initial?.note || "");
+  const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const addFiles = (picked) => setFiles((prev) => [...prev, ...picked]);
+  const removeFile = (idx) => setFiles((prev) => prev.filter((_, i) => i !== idx));
+
   const submit = async () => {
     setError("");
-    if (!doctorName.trim() || !caseName.trim() || !crownCount || !file) {
-      setError("من فضلك املأ كل الحقول وارفع الملف");
+    if (!doctorName.trim() || !caseName.trim() || !crownCount) {
+      setError("من فضلك املأ كل الحقول");
       return;
     }
-    if (file.size > MAX_FILE_MB * 1024 * 1024) {
-      setError(`الملف أكبر من ${MAX_FILE_MB} ميجا، اختار ملف أصغر`);
+    const tooBig = files.find((f) => f.size > MAX_FILE_MB * 1024 * 1024);
+    if (tooBig) {
+      setError(`الملف "${tooBig.name}" أكبر من ${MAX_FILE_MB} ميجا`);
       return;
     }
     setSaving(true);
@@ -389,8 +393,7 @@ function AdminUploadForm({ stage, caseItem, onDone }) {
         crownCount: Number(crownCount),
         shade,
         note: note.trim(),
-        fileName: file.name,
-        file,
+        files,
       };
       await onDone(record);
     } catch (e) {
@@ -460,7 +463,7 @@ function AdminUploadForm({ stage, caseItem, onDone }) {
         </div>
       </div>
 
-      <FileDropZone file={file} onSelect={setFile} placeholder="Choose case file" />
+      <FileDropZone files={files} onAdd={addFiles} onRemove={removeFile} placeholder="Choose case files (optional)" />
 
       {error && <p className="text-xs text-[#B1503F] mt-2">{error}</p>}
 
@@ -471,7 +474,7 @@ function AdminUploadForm({ stage, caseItem, onDone }) {
         style={{ background: meta.color }}
       >
         {saving ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-        رفع لمرحلة {meta.label}
+        {initial ? "حفظ التعديلات" : `رفع لمرحلة ${meta.label}`}
       </button>
     </div>
   );
@@ -485,18 +488,22 @@ function NewCaseForm({ onCreated, onClose }) {
   const [doctorName, setDoctorName] = useState("");
   const [caseName, setCaseName] = useState("");
   const [note, setNote] = useState("");
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const addFiles = (picked) => setFiles((prev) => [...prev, ...picked]);
+  const removeFile = (idx) => setFiles((prev) => prev.filter((_, i) => i !== idx));
+
   const submit = async () => {
     setError("");
-    if (!doctorName.trim() || !caseName.trim() || !file) {
-      setError("اكتب اسم الدكتور واسم الحالة وارفع الملف");
+    if (!doctorName.trim() || !caseName.trim() || files.length === 0) {
+      setError("اكتب اسم الدكتور واسم الحالة وارفع ملف واحد على الأقل");
       return;
     }
-    if (file.size > MAX_FILE_MB * 1024 * 1024) {
-      setError(`الملف أكبر من ${MAX_FILE_MB} ميجا، اختار ملف أصغر`);
+    const tooBig = files.find((f) => f.size > MAX_FILE_MB * 1024 * 1024);
+    if (tooBig) {
+      setError(`الملف "${tooBig.name}" أكبر من ${MAX_FILE_MB} ميجا`);
       return;
     }
     setSaving(true);
@@ -505,8 +512,7 @@ function NewCaseForm({ onCreated, onClose }) {
         doctorName: doctorName.trim(),
         caseName: caseName.trim(),
         note: note.trim(),
-        fileName: file.name,
-        file,
+        files,
       });
     } catch (e) {
       setError(e.message || "حصل خطأ أثناء الرفع، جرب تاني");
@@ -550,7 +556,7 @@ function NewCaseForm({ onCreated, onClose }) {
           className="w-full rounded-lg border border-[#E4E0D8] px-3 py-2 text-sm mb-3 outline-none focus:border-[#1F5C57]"
         />
 
-        <FileDropZone file={file} onSelect={setFile} placeholder="Upload design file" />
+        <FileDropZone files={files} onAdd={addFiles} onRemove={removeFile} placeholder="Upload one or more files" />
 
         {error && <p className="text-xs text-[#B1503F] mt-2">{error}</p>}
 
@@ -578,18 +584,22 @@ function AdminNewCaseForm({ onCreated, onClose }) {
   const [crownCount, setCrownCount] = useState("");
   const [shade, setShade] = useState(SHADES[0]);
   const [note, setNote] = useState("");
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const addFiles = (picked) => setFiles((prev) => [...prev, ...picked]);
+  const removeFile = (idx) => setFiles((prev) => prev.filter((_, i) => i !== idx));
+
   const submit = async () => {
     setError("");
-    if (!doctorName.trim() || !caseName.trim() || !crownCount || !file) {
-      setError("من فضلك املأ كل الحقول وارفع الملف");
+    if (!doctorName.trim() || !caseName.trim() || !crownCount || files.length === 0) {
+      setError("من فضلك املأ كل الحقول وارفع ملف واحد على الأقل");
       return;
     }
-    if (file.size > MAX_FILE_MB * 1024 * 1024) {
-      setError(`الملف أكبر من ${MAX_FILE_MB} ميجا، اختار ملف أصغر`);
+    const tooBig = files.find((f) => f.size > MAX_FILE_MB * 1024 * 1024);
+    if (tooBig) {
+      setError(`الملف "${tooBig.name}" أكبر من ${MAX_FILE_MB} ميجا`);
       return;
     }
     setSaving(true);
@@ -600,8 +610,7 @@ function AdminNewCaseForm({ onCreated, onClose }) {
         crownCount: Number(crownCount),
         shade,
         note: note.trim(),
-        fileName: file.name,
-        file,
+        files,
       });
     } catch (e) {
       setError(e.message || "حصل خطأ أثناء الرفع، جرب تاني");
@@ -676,7 +685,7 @@ function AdminNewCaseForm({ onCreated, onClose }) {
           </div>
         </div>
 
-        <FileDropZone file={file} onSelect={setFile} placeholder="Upload design file" />
+        <FileDropZone files={files} onAdd={addFiles} onRemove={removeFile} placeholder="Upload one or more files" />
 
         {error && <p className="text-xs text-[#B1503F] mt-2">{error}</p>}
 
@@ -698,7 +707,7 @@ function AdminNewCaseForm({ onCreated, onClose }) {
    تفاصيل الحالة
 --------------------------------------------------------------- */
 
-function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggleDone, onDeleteCase, onDeleteStageFile }) {
+function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggleDone, onDeleteCase, onDeleteFile }) {
   const role = user.role;
   const stage = caseItem.stage;
   const meta = STAGE_META[stage];
@@ -707,7 +716,7 @@ function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggle
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [deletingCase, setDeletingCase] = useState(false);
-  const [deletingFile, setDeletingFile] = useState(false);
+  const [deletingFileId, setDeletingFileId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -730,20 +739,20 @@ function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggle
     if (!window.confirm("متأكد إنك عايز تمسح الحالة دي؟ الإجراء ده مش قابل للتراجع.")) return;
     setDeletingCase(true);
     try {
-      await onDeleteCase(caseItem.id, stage);
+      await onDeleteCase(caseItem.id);
     } finally {
       setDeletingCase(false);
     }
   };
 
-  const handleDeleteFile = async () => {
+  const handleDeleteFile = async (fileId, filePath) => {
     if (!window.confirm("متأكد إنك عايز تمسح الملف؟")) return;
-    setDeletingFile(true);
+    setDeletingFileId(fileId);
     try {
-      await onDeleteStageFile(caseItem.id, stage);
+      await onDeleteFile(fileId, filePath);
       await load();
     } finally {
-      setDeletingFile(false);
+      setDeletingFileId(null);
     }
   };
 
@@ -813,7 +822,7 @@ function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggle
             <Loader2 className="animate-spin" size={20} />
           </div>
         ) : editing ? (
-          <AdminUploadForm stage={stage} caseItem={caseItem} onDone={handleAdminUpload} />
+          <AdminUploadForm stage={stage} caseItem={caseItem} initial={record} onDone={handleAdminUpload} />
         ) : record ? (
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -832,10 +841,21 @@ function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggle
             {record.shade && <DataRow label="Shade" value={record.shade} />}
             {record.note && <DataRow label="Note" value={record.note} />}
             <DataRow label="تاريخ الرفع" value={formatDate(record.uploadedAt)} />
-            <FilePreviewCard record={record} deleting={deletingFile} onDelete={canManage ? handleDeleteFile : undefined} />
+            {record.files.length === 0 ? (
+              <p className="text-xs text-[#9AA29F] mt-3">مفيش ملفات مرفوعة</p>
+            ) : (
+              record.files.map((f) => (
+                <FilePreviewCard
+                  key={f.id}
+                  record={f}
+                  deleting={deletingFileId === f.id}
+                  onDelete={canManage ? () => handleDeleteFile(f.id, f.filePath) : undefined}
+                />
+              ))
+            )}
           </div>
         ) : (
-          <EmptyState text="مفيش ملف مرفوع للحالة دي" />
+          <EmptyState text="مفيش بيانات للحالة دي" />
         )}
       </div>
     </div>
@@ -855,34 +875,62 @@ function EmptyState({ text }) {
    منطقة رفع الملف — دروب أو دوس عادي
 --------------------------------------------------------------- */
 
-function FileDropZone({ file, onSelect, placeholder = "Choose or drop a file" }) {
+function FileDropZone({ files, onAdd, onRemove, placeholder = "Choose or drop files" }) {
   const [dragging, setDragging] = useState(false);
 
   const handleDrop = (e) => {
     e.preventDefault();
     setDragging(false);
-    const dropped = e.dataTransfer.files?.[0];
-    if (dropped) onSelect(dropped);
+    const dropped = Array.from(e.dataTransfer.files || []);
+    if (dropped.length) onAdd(dropped);
   };
 
   return (
-    <label
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={handleDrop}
-      className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-3 text-sm cursor-pointer transition-colors"
-      style={{
-        borderColor: dragging ? "#1F5C57" : "#C7C2B6",
-        background: dragging ? "#E7F0EE" : "#fff",
-      }}
-    >
-      <Upload size={15} color={dragging ? "#1F5C57" : "#6B7674"} />
-      <span className="text-[#22302E]">{file ? file.name : dragging ? "سيب الملف هنا" : placeholder}</span>
-      <input type="file" className="hidden" onChange={(e) => onSelect(e.target.files?.[0] || null)} />
-    </label>
+    <div>
+      <label
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-3 text-sm cursor-pointer transition-colors"
+        style={{
+          borderColor: dragging ? "#1F5C57" : "#C7C2B6",
+          background: dragging ? "#E7F0EE" : "#fff",
+        }}
+      >
+        <Upload size={15} color={dragging ? "#1F5C57" : "#6B7674"} />
+        <span className="text-[#22302E]">
+          {dragging ? "سيب الملفات هنا" : files.length ? `${files.length} ملف مختار — ضيف كمان` : placeholder}
+        </span>
+        <input
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const picked = Array.from(e.target.files || []);
+            if (picked.length) onAdd(picked);
+            e.target.value = "";
+          }}
+        />
+      </label>
+      {files.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {files.map((f, i) => (
+            <div
+              key={`${f.name}-${i}`}
+              className="flex items-center justify-between rounded-lg border border-[#E4E0D8] bg-white px-3 py-1.5"
+            >
+              <span className="text-xs text-[#22302E] truncate max-w-[220px]">{f.name}</span>
+              <button onClick={() => onRemove(i)} className="text-[#B1503F] hover:opacity-70">
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1178,38 +1226,41 @@ function Dashboard({ user, onLogout }) {
   }, [loadIndex]);
 
   const loadStage = useCallback(async (caseId, stage) => {
-    const { data, error } = await supabase
-      .from("case_stage_files")
-      .select("*")
-      .eq("case_id", caseId)
-      .eq("stage", stage)
-      .maybeSingle();
-    if (error || !data) return null;
+    const [{ data: meta }, { data: files }] = await Promise.all([
+      supabase.from("case_stage_files").select("*").eq("case_id", caseId).eq("stage", stage).maybeSingle(),
+      supabase.from("case_files").select("*").eq("case_id", caseId).eq("stage", stage).order("uploaded_at", { ascending: true }),
+    ]);
+    if (!meta) return null;
     return {
-      doctorName: data.doctor_name,
-      caseName: data.case_name,
-      crownCount: data.crown_count,
-      shade: data.shade,
-      note: data.note,
-      fileName: data.file_name,
-      filePath: data.file_path,
-      fileUrl: getFileUrl(data.file_path),
-      uploadedAt: data.uploaded_at,
+      doctorName: meta.doctor_name,
+      caseName: meta.case_name,
+      crownCount: meta.crown_count,
+      shade: meta.shade,
+      note: meta.note,
+      uploadedAt: meta.uploaded_at,
+      files: (files || []).map((f) => ({
+        id: f.id,
+        fileName: f.file_name,
+        filePath: f.file_path,
+        fileUrl: getFileUrl(f.file_path),
+        uploadedAt: f.uploaded_at,
+      })),
     };
   }, []);
 
   const downloadFile = useCallback(
     async (caseId, stage) => {
       const record = await loadStage(caseId, stage);
-      if (!record || !record.fileUrl) return;
-      await triggerFileDownload(record.fileUrl, record.fileName);
+      if (!record || !record.files.length) return;
+      for (const f of record.files) {
+        await triggerFileDownload(f.fileUrl, f.fileName);
+      }
     },
     [loadStage]
   );
 
   const saveStage = useCallback(
     async (caseId, stage, record) => {
-      const filePath = record.file ? await uploadCaseFile(caseId, stage, record.file) : record.filePath;
       const { error } = await supabase.from("case_stage_files").upsert(
         {
           case_id: caseId,
@@ -1219,42 +1270,47 @@ function Dashboard({ user, onLogout }) {
           crown_count: record.crownCount,
           shade: record.shade,
           note: record.note || null,
-          file_path: filePath,
-          file_name: record.fileName,
           uploaded_at: new Date().toISOString(),
         },
         { onConflict: "case_id,stage" }
       );
       if (error) throw error;
+
+      if (record.files && record.files.length) {
+        const inserts = [];
+        for (let i = 0; i < record.files.length; i++) {
+          const f = record.files[i];
+          const filePath = await uploadCaseFile(caseId, stage, f, i);
+          inserts.push({ case_id: caseId, stage, file_path: filePath, file_name: f.name, uploaded_at: new Date().toISOString() });
+        }
+        const { error: filesError } = await supabase.from("case_files").insert(inserts);
+        if (filesError) throw filesError;
+      }
       await loadIndex();
     },
     [loadIndex]
   );
 
-  const deleteStageFile = useCallback(
-    async (caseId, stage) => {
-      const record = await loadStage(caseId, stage);
-      if (record?.filePath) {
-        await supabase.storage.from(CASE_FILES_BUCKET).remove([record.filePath]);
-      }
-      await supabase.from("case_stage_files").delete().eq("case_id", caseId).eq("stage", stage);
-      await loadIndex();
-    },
-    [loadStage, loadIndex]
-  );
+  const deleteFile = useCallback(async (fileId, filePath) => {
+    if (filePath) {
+      await supabase.storage.from(CASE_FILES_BUCKET).remove([filePath]);
+    }
+    await supabase.from("case_files").delete().eq("id", fileId);
+  }, []);
 
   const deleteCase = useCallback(
-    async (caseId, stage) => {
-      const record = await loadStage(caseId, stage);
-      if (record?.filePath) {
-        await supabase.storage.from(CASE_FILES_BUCKET).remove([record.filePath]);
+    async (caseId) => {
+      const { data: files } = await supabase.from("case_files").select("file_path").eq("case_id", caseId);
+      const paths = (files || []).map((f) => f.file_path).filter(Boolean);
+      if (paths.length) {
+        await supabase.storage.from(CASE_FILES_BUCKET).remove(paths);
       }
       await supabase.from("cases").delete().eq("id", caseId);
       await loadIndex();
       setSelectedId(null);
       setScreen("stage");
     },
-    [loadStage, loadIndex]
+    [loadIndex]
   );
 
   const toggleDone = async (caseId, done) => {
@@ -1262,7 +1318,7 @@ function Dashboard({ user, onLogout }) {
     setIndex((prev) => prev.map((c) => (c.id === caseId ? { ...c, done } : c)));
   };
 
-  const createCase = async ({ doctorName, caseName, note, crownCount, shade, fileName, file }) => {
+  const createCase = async ({ doctorName, caseName, note, crownCount, shade, files }) => {
     const { data: newCase, error: caseError } = await supabase
       .from("cases")
       .insert({
@@ -1276,8 +1332,7 @@ function Dashboard({ user, onLogout }) {
       .single();
     if (caseError) throw caseError;
 
-    const filePath = await uploadCaseFile(newCase.id, activeStage, file);
-    const { error: fileError } = await supabase.from("case_stage_files").insert({
+    const { error: metaError } = await supabase.from("case_stage_files").insert({
       case_id: newCase.id,
       stage: activeStage,
       doctor_name: doctorName,
@@ -1285,11 +1340,20 @@ function Dashboard({ user, onLogout }) {
       crown_count: crownCount != null ? crownCount : null,
       shade: shade || null,
       note: note || null,
-      file_path: filePath,
-      file_name: fileName,
       uploaded_at: new Date().toISOString(),
     });
-    if (fileError) throw fileError;
+    if (metaError) throw metaError;
+
+    const inserts = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const filePath = await uploadCaseFile(newCase.id, activeStage, f, i);
+      inserts.push({ case_id: newCase.id, stage: activeStage, file_path: filePath, file_name: f.name, uploaded_at: new Date().toISOString() });
+    }
+    if (inserts.length) {
+      const { error: fileError } = await supabase.from("case_files").insert(inserts);
+      if (fileError) throw fileError;
+    }
 
     await loadIndex();
     setShowNewCase(false);
@@ -1364,7 +1428,7 @@ function Dashboard({ user, onLogout }) {
             onSaveStage={saveStage}
             onToggleDone={toggleDone}
             onDeleteCase={deleteCase}
-            onDeleteStageFile={deleteStageFile}
+            onDeleteFile={deleteFile}
           />
         )}
       </div>
@@ -1387,6 +1451,7 @@ export default function App() {
   const [session, setSession] = useState(undefined); // undefined = loading, null = logged out
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const loadedUserId = React.useRef(null);
 
   const loadProfile = useCallback(async (userId) => {
     setProfileLoading(true);
@@ -1396,6 +1461,7 @@ export default function App() {
     } else {
       setProfile(null);
     }
+    loadedUserId.current = userId;
     setProfileLoading(false);
   }, []);
 
@@ -1413,8 +1479,14 @@ export default function App() {
 
   useEffect(() => {
     if (session?.user) {
-      loadProfile(session.user.id);
+      // Skip re-fetching (and re-showing the loading screen) if it's still the
+      // same signed-in user — e.g. a token refresh on tab refocus shouldn't
+      // remount the whole dashboard and wipe in-progress screen state.
+      if (loadedUserId.current !== session.user.id) {
+        loadProfile(session.user.id);
+      }
     } else {
+      loadedUserId.current = null;
       setProfile(null);
     }
   }, [session, loadProfile]);
