@@ -32,6 +32,33 @@ const SHADES = [
   "D2", "D3", "D4",
 ];
 
+const PRICE_LIST = {
+  "XT": 350,
+  "Mono": 450,
+  "Multi": 650,
+  "Zolid": 800,
+  "Emax": 1600,
+  "Bar": 250,
+  "DSD + model": 550,
+  "Post": 200,
+  "Veneer": 1800,
+  "Night Guard": 150,
+  "Zolid Ultra": 850,
+  "Custome Abutment": 950,
+  "PMMA Printed": 100,
+  "PMMA Milled": 150,
+  "models": 300,
+  "Jig": 1000,
+  "fath": 200,
+  "milled titanium bar": 850,
+  "Design": 50,
+  "Snap on": 1000,
+  "ingivectomy": 400,
+  "Scanner": 200,
+};
+const PRICE_TYPES = Object.keys(PRICE_LIST);
+const USER_VISIBLE_PRICE_TYPES = ["XT", "Mono", "Multi", "Zolid", "Zolid Ultra", "PMMA Milled"];
+
 const STAGES = ["final", "prova", "design"];
 
 const STAGE_META = {
@@ -366,6 +393,7 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
   const [caseName, setCaseName] = useState(initial?.caseName ?? caseItem.caseName);
   const [crownCount, setCrownCount] = useState(initial?.crownCount != null ? String(initial.crownCount) : "");
   const [shade, setShade] = useState(initial?.shade || SHADES[0]);
+  const [priceType, setPriceType] = useState(initial?.priceType || PRICE_TYPES[0]);
   const [note, setNote] = useState(initial?.note || "");
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
@@ -392,6 +420,7 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
         caseName: caseName.trim(),
         crownCount: Number(crownCount),
         shade,
+        priceType: stage === "final" ? priceType : null,
         note: note.trim(),
         files,
       };
@@ -452,6 +481,25 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
             <ChevronDown size={14} className="absolute left-2 top-2.5 pointer-events-none text-[#6B7674]" />
           </div>
         </div>
+        {stage === "final" && (
+          <div className="col-span-2">
+            <label className="block text-[11px] text-[#6B7674] mb-1">Price</label>
+            <div className="relative">
+              <select
+                value={priceType}
+                onChange={(e) => setPriceType(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-[#E4E0D8] px-2.5 py-2 text-sm outline-none focus:border-[#1F5C57] bg-white"
+              >
+                {PRICE_TYPES.map((p) => (
+                  <option key={p} value={p}>
+                    {p} — {PRICE_LIST[p]}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute left-2 top-2.5 pointer-events-none text-[#6B7674]" />
+            </div>
+          </div>
+        )}
         <div className="col-span-2">
           <label className="block text-[11px] text-[#6B7674] mb-1">Note</label>
           <input
@@ -484,7 +532,7 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
    فورم إضافة حالة جديدة (دكتور)
 --------------------------------------------------------------- */
 
-function NewCaseForm({ onCreated, onClose }) {
+function NewCaseForm({ onCreated, onClose, doctorSuggestions }) {
   const [doctorName, setDoctorName] = useState("");
   const [caseName, setCaseName] = useState("");
   const [note, setNote] = useState("");
@@ -534,11 +582,17 @@ function NewCaseForm({ onCreated, onClose }) {
         <label className="block text-[11px] text-[#6B7674] mb-1">Doctor</label>
         <input
           autoFocus
+          list="doctor-suggestions-user"
           value={doctorName}
           onChange={(e) => setDoctorName(e.target.value)}
           placeholder="e.g. Dr. Ahmed Sami"
           className="w-full rounded-lg border border-[#E4E0D8] px-3 py-2 text-sm mb-3 outline-none focus:border-[#1F5C57]"
         />
+        <datalist id="doctor-suggestions-user">
+          {doctorSuggestions.map((d) => (
+            <option key={d} value={d} />
+          ))}
+        </datalist>
 
         <label className="block text-[11px] text-[#6B7674] mb-1">Patient</label>
         <input
@@ -578,11 +632,12 @@ function NewCaseForm({ onCreated, onClose }) {
    فورم حالة جديدة (أدمن) — بيانات أوسع من المستخدم
 --------------------------------------------------------------- */
 
-function AdminNewCaseForm({ onCreated, onClose }) {
+function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
   const [doctorName, setDoctorName] = useState("");
   const [caseName, setCaseName] = useState("");
   const [crownCount, setCrownCount] = useState("");
   const [shade, setShade] = useState(SHADES[0]);
+  const [priceType, setPriceType] = useState(PRICE_TYPES[0]);
   const [note, setNote] = useState("");
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
@@ -609,6 +664,7 @@ function AdminNewCaseForm({ onCreated, onClose }) {
         caseName: caseName.trim(),
         crownCount: Number(crownCount),
         shade,
+        priceType: stage === "final" ? priceType : null,
         note: note.trim(),
         files,
       });
@@ -634,10 +690,16 @@ function AdminNewCaseForm({ onCreated, onClose }) {
             <label className="block text-[11px] text-[#6B7674] mb-1">Doctor</label>
             <input
               autoFocus
+              list="doctor-suggestions-admin"
               value={doctorName}
               onChange={(e) => setDoctorName(e.target.value)}
               className="w-full rounded-lg border border-[#E4E0D8] px-2.5 py-2 text-sm outline-none focus:border-[#1F5C57]"
             />
+            <datalist id="doctor-suggestions-admin">
+              {doctorSuggestions.map((d) => (
+                <option key={d} value={d} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="block text-[11px] text-[#6B7674] mb-1">Patient</label>
@@ -674,6 +736,25 @@ function AdminNewCaseForm({ onCreated, onClose }) {
               <ChevronDown size={14} className="absolute left-2 top-2.5 pointer-events-none text-[#6B7674]" />
             </div>
           </div>
+          {stage === "final" && (
+            <div className="col-span-2">
+              <label className="block text-[11px] text-[#6B7674] mb-1">Price</label>
+              <div className="relative">
+                <select
+                  value={priceType}
+                  onChange={(e) => setPriceType(e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-[#E4E0D8] px-2.5 py-2 text-sm outline-none focus:border-[#1F5C57]"
+                >
+                  {PRICE_TYPES.map((p) => (
+                    <option key={p} value={p}>
+                      {p} — {PRICE_LIST[p]}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute left-2 top-2.5 pointer-events-none text-[#6B7674]" />
+              </div>
+            </div>
+          )}
           <div className="col-span-2">
             <label className="block text-[11px] text-[#6B7674] mb-1">Note</label>
             <input
@@ -839,6 +920,7 @@ function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggle
             <DataRow label="Patient" value={record.caseName} />
             {record.crownCount != null && <DataRow label="N.O.C." value={record.crownCount} />}
             {record.shade && <DataRow label="Shade" value={record.shade} />}
+            {record.priceType && <DataRow label="Price" value={`${record.priceType} — ${PRICE_LIST[record.priceType] || 0} × ${record.crownCount || 0} = ${(PRICE_LIST[record.priceType] || 0) * (record.crownCount || 0)}`} />}
             {record.note && <DataRow label="Note" value={record.note} />}
             <DataRow label="تاريخ الرفع" value={formatDate(record.uploadedAt)} />
             {record.files.length === 0 ? (
@@ -975,11 +1057,15 @@ function CaseCard({ item, onOpen, onDownload, showDoctor }) {
           {meta.labelEn}
         </span>
       </div>
-      <p className="text-base text-[#22302E] font-semibold mb-1">{item.caseName}</p>
-      {showDoctor && (
-        <p className="text-xs text-[#6B7674] flex items-center gap-1">
-          <UserRound size={12} /> {item.doctorName}
-        </p>
+      {showDoctor ? (
+        <>
+          <p className="text-base text-[#22302E] font-semibold mb-1 flex items-center gap-1">
+            <UserRound size={13} /> {item.doctorName}
+          </p>
+          <p className="text-xs text-[#6B7674]">{item.caseName}</p>
+        </>
+      ) : (
+        <p className="text-base text-[#22302E] font-semibold mb-1">{item.caseName}</p>
       )}
       <div className="flex items-center justify-between mt-1.5">
         <p className="text-xs text-[#9AA29F] flex items-center gap-1">
@@ -1040,65 +1126,54 @@ function StageHome({ user, index, onSelectStage }) {
    ليستة حالات مرحلة معيّنة
 --------------------------------------------------------------- */
 
-function StageList({
-  user,
-  stage,
-  index,
-  loading,
-  onBack,
-  onOpenCase,
-  onNewCase,
-  onDownload,
-  onLoadStage,
-  search,
-  setSearch,
-  sortMode,
-  setSortMode,
-}) {
+function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase, onDownload, sortMode, setSortMode }) {
   const meta = STAGE_META[stage];
-  const [month, setMonth] = useState(""); // 'YYYY-MM' or ''
-  const [totalCrowns, setTotalCrowns] = useState(0);
-  const [crownsLoading, setCrownsLoading] = useState(false);
+  const isAdminFinal = user.role === "admin" && stage === "final";
 
-  const searchActive = user.role === "admin" && stage === "final" && search.trim();
+  const [reportMonth, setReportMonth] = useState("");
+  const [reportDoctor, setReportDoctor] = useState("");
+
+  useEffect(() => {
+    setReportDoctor("");
+  }, [reportMonth]);
+
+  const baseCases = useMemo(() => {
+    let list = index.filter((c) => c.stage === stage);
+    if (stage === "final" && user.role !== "admin") {
+      list = list.filter((c) => c.priceType && USER_VISIBLE_PRICE_TYPES.includes(c.priceType));
+    }
+    return list;
+  }, [index, stage, user.role]);
 
   const visibleCases = useMemo(() => {
-    let list = index.filter((c) => c.stage === stage);
-    if (searchActive) {
-      const q = search.trim();
-      list = list.filter((c) => c.doctorName.includes(q));
-      if (month) {
-        list = list.filter((c) => (c.createdAt || "").slice(0, 7) === month);
-      }
-    }
-    const sorted = [...list].sort((a, b) => {
+    return [...baseCases].sort((a, b) => {
       if (sortMode === "done") {
         if (a.done !== b.done) return a.done ? 1 : -1;
         return new Date(b.createdAt) - new Date(a.createdAt);
       }
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
-    return sorted;
-  }, [index, stage, searchActive, search, month, sortMode]);
+  }, [baseCases, sortMode]);
 
-  useEffect(() => {
-    if (!searchActive) {
-      setTotalCrowns(0);
-      return;
-    }
-    let cancelled = false;
-    setCrownsLoading(true);
-    Promise.all(visibleCases.map((c) => onLoadStage(c.id, "final"))).then((records) => {
-      if (cancelled) return;
-      const sum = records.reduce((acc, r) => acc + (r?.crownCount || 0), 0);
-      setTotalCrowns(sum);
-      setCrownsLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchActive, visibleCases, onLoadStage]);
+  const monthCases = useMemo(() => {
+    if (!reportMonth) return [];
+    return baseCases.filter((c) => (c.createdAt || "").slice(0, 7) === reportMonth);
+  }, [baseCases, reportMonth]);
+
+  const doctorsInMonth = useMemo(() => [...new Set(monthCases.map((c) => c.doctorName))].sort(), [monthCases]);
+
+  const doctorRows = useMemo(() => {
+    if (!reportDoctor) return [];
+    return monthCases
+      .filter((c) => c.doctorName === reportDoctor)
+      .map((c) => {
+        const price = PRICE_LIST[c.priceType] || 0;
+        const crowns = c.crownCount || 0;
+        return { id: c.id, caseName: c.caseName, crownCount: crowns, price, total: price * crowns };
+      });
+  }, [monthCases, reportDoctor]);
+
+  const grandTotal = doctorRows.reduce((sum, r) => sum + r.total, 0);
 
   return (
     <div dir="rtl" style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
@@ -1113,56 +1188,96 @@ function StageList({
             {meta.label} <span className="text-base text-[#9AA29F]">— {meta.sub}</span>
           </h2>
         </div>
-        <button
-          onClick={onNewCase}
-          className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-white"
-          style={{ background: "#1F5C57" }}
-        >
-          <Plus size={15} /> حالة جديدة
-        </button>
+        <div className="flex items-center gap-2">
+          {user.role === "admin" && (
+            <div className="relative">
+              <select
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value)}
+                className="appearance-none rounded-lg border border-[#E4E0D8] bg-white pl-8 pr-3 py-2 text-sm outline-none focus:border-[#1F5C57]"
+              >
+                <option value="done">غير المكتملة أولاً</option>
+                <option value="date">الأحدث أولاً</option>
+              </select>
+              <ChevronDown size={14} className="absolute left-2.5 top-2.5 pointer-events-none text-[#6B7674]" />
+            </div>
+          )}
+          <button
+            onClick={onNewCase}
+            className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-white"
+            style={{ background: "#1F5C57" }}
+          >
+            <Plus size={15} /> حالة جديدة
+          </button>
+        </div>
       </div>
 
-      {user.role === "admin" && stage === "final" && (
-        <div className="flex flex-wrap items-center gap-3 mb-5">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute right-3 top-2.5 text-[#9AA29F]" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by doctor name..."
-              className="w-full rounded-lg border border-[#E4E0D8] pr-9 pl-3 py-2 text-sm outline-none focus:border-[#1F5C57] bg-white"
-            />
-          </div>
+      {isAdminFinal && (
+        <div className="rounded-xl border border-[#E4E0D8] bg-white p-4 mb-5">
+          <p className="text-xs font-semibold text-[#6B7674] mb-2">تقرير شهري</p>
           <input
             type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="rounded-lg border border-[#E4E0D8] bg-white px-3 py-2 text-sm outline-none focus:border-[#1F5C57]"
+            value={reportMonth}
+            onChange={(e) => setReportMonth(e.target.value)}
+            className="rounded-lg border border-[#E4E0D8] bg-white px-3 py-2 text-sm outline-none focus:border-[#1F5C57] mb-3"
           />
-          <div className="relative">
-            <select
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value)}
-              className="appearance-none rounded-lg border border-[#E4E0D8] bg-white pl-8 pr-3 py-2 text-sm outline-none focus:border-[#1F5C57]"
-            >
-              <option value="done">غير المكتملة أولاً</option>
-              <option value="date">الأحدث أولاً</option>
-            </select>
-            <ChevronDown size={14} className="absolute left-2.5 top-2.5 pointer-events-none text-[#6B7674]" />
-          </div>
-        </div>
-      )}
 
-      {searchActive && !loading && (
-        <div
-          className="flex items-center gap-2 rounded-lg px-4 py-2.5 mb-4 text-sm font-semibold"
-          style={{ background: "#E7F0EE", color: "#1F5C57" }}
-        >
-          <UserRound size={15} />
-          {search.trim()}
-          {month && ` — ${month}`} — إجمالي{" "}
-          {crownsLoading ? <Loader2 size={13} className="animate-spin inline" /> : totalCrowns} كراون ({visibleCases.length}{" "}
-          حالة)
+          {reportMonth &&
+            (doctorsInMonth.length === 0 ? (
+              <p className="text-xs text-[#9AA29F]">مفيش حالات في الشهر ده</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {doctorsInMonth.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setReportDoctor(d)}
+                    className="rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors"
+                    style={{
+                      borderColor: reportDoctor === d ? "#1F5C57" : "#E4E0D8",
+                      background: reportDoctor === d ? "#1F5C57" : "#fff",
+                      color: reportDoctor === d ? "#fff" : "#22302E",
+                    }}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            ))}
+
+          {reportDoctor && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="text-[#6B7674] border-b border-[#E4E0D8]">
+                    <th className="text-right py-1.5 pr-2">Patient</th>
+                    <th className="text-right py-1.5 px-2">N.O.C.</th>
+                    <th className="text-right py-1.5 px-2">Price</th>
+                    <th className="text-right py-1.5 pl-2">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {doctorRows.map((r) => (
+                    <tr key={r.id} className="border-b border-[#F3F1EC]">
+                      <td className="py-1.5 pr-2 text-[#22302E]">{r.caseName}</td>
+                      <td className="py-1.5 px-2 text-[#22302E]">{r.crownCount}</td>
+                      <td className="py-1.5 px-2 text-[#22302E]">{r.price}</td>
+                      <td className="py-1.5 pl-2 text-[#22302E] font-semibold">{r.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="py-2 pr-2 text-[#6B7674] font-semibold">
+                      الإجمالي
+                    </td>
+                    <td className="py-2 pl-2 font-bold" style={{ color: "#1F5C57" }}>
+                      {grandTotal}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -1202,6 +1317,8 @@ function Dashboard({ user, onLogout }) {
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState("done"); // 'done' | 'date'
 
+  const doctorSuggestions = useMemo(() => [...new Set(index.map((c) => c.doctorName).filter(Boolean))].sort(), [index]);
+
   const loadIndex = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.from("cases").select("*").order("created_at", { ascending: false });
@@ -1215,6 +1332,8 @@ function Dashboard({ user, onLogout }) {
           uploadedBy: c.uploaded_by,
           createdAt: c.created_at,
           done: c.done,
+          crownCount: c.crown_count,
+          priceType: c.price_type,
         }))
       );
     }
@@ -1236,6 +1355,7 @@ function Dashboard({ user, onLogout }) {
       caseName: meta.case_name,
       crownCount: meta.crown_count,
       shade: meta.shade,
+      priceType: meta.price_type,
       note: meta.note,
       uploadedAt: meta.uploaded_at,
       files: (files || []).map((f) => ({
@@ -1269,12 +1389,18 @@ function Dashboard({ user, onLogout }) {
           case_name: record.caseName,
           crown_count: record.crownCount,
           shade: record.shade,
+          price_type: record.priceType || null,
           note: record.note || null,
           uploaded_at: new Date().toISOString(),
         },
         { onConflict: "case_id,stage" }
       );
       if (error) throw error;
+
+      await supabase
+        .from("cases")
+        .update({ crown_count: record.crownCount, price_type: record.priceType || null })
+        .eq("id", caseId);
 
       if (record.files && record.files.length) {
         const inserts = [];
@@ -1318,7 +1444,7 @@ function Dashboard({ user, onLogout }) {
     setIndex((prev) => prev.map((c) => (c.id === caseId ? { ...c, done } : c)));
   };
 
-  const createCase = async ({ doctorName, caseName, note, crownCount, shade, files }) => {
+  const createCase = async ({ doctorName, caseName, note, crownCount, shade, priceType, files }) => {
     const { data: newCase, error: caseError } = await supabase
       .from("cases")
       .insert({
@@ -1327,6 +1453,8 @@ function Dashboard({ user, onLogout }) {
         uploaded_by: user.id,
         stage: activeStage,
         done: false,
+        crown_count: crownCount != null ? crownCount : null,
+        price_type: priceType || null,
       })
       .select()
       .single();
@@ -1339,6 +1467,7 @@ function Dashboard({ user, onLogout }) {
       case_name: caseName,
       crown_count: crownCount != null ? crownCount : null,
       shade: shade || null,
+      price_type: priceType || null,
       note: note || null,
       uploaded_at: new Date().toISOString(),
     });
@@ -1435,9 +1564,14 @@ function Dashboard({ user, onLogout }) {
 
       {showNewCase &&
         (user.role === "admin" ? (
-          <AdminNewCaseForm onCreated={createCase} onClose={() => setShowNewCase(false)} />
+          <AdminNewCaseForm
+            stage={activeStage}
+            doctorSuggestions={doctorSuggestions}
+            onCreated={createCase}
+            onClose={() => setShowNewCase(false)}
+          />
         ) : (
-          <NewCaseForm onCreated={createCase} onClose={() => setShowNewCase(false)} />
+          <NewCaseForm doctorSuggestions={doctorSuggestions} onCreated={createCase} onClose={() => setShowNewCase(false)} />
         ))}
     </div>
   );
