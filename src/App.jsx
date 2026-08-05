@@ -19,6 +19,7 @@ import {
   ClipboardList,
   ChevronDown,
   Trash2,
+  Star,
 } from "lucide-react";
 
 /* ---------------------------------------------------------------
@@ -79,6 +80,25 @@ function formatDate(iso) {
     return d.toLocaleDateString("ar-EG", { day: "numeric", month: "short", year: "numeric" });
   } catch {
     return "";
+  }
+}
+
+function getViewedCaseIds(userId) {
+  try {
+    const raw = localStorage.getItem(`viewed-cases:${userId}`);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function markCaseViewed(userId, caseId) {
+  try {
+    const set = getViewedCaseIds(userId);
+    set.add(caseId);
+    localStorage.setItem(`viewed-cases:${userId}`, JSON.stringify([...set]));
+  } catch {
+    // best-effort only
   }
 }
 
@@ -788,7 +808,7 @@ function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
    تفاصيل الحالة
 --------------------------------------------------------------- */
 
-function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggleDone, onDeleteCase, onDeleteFile }) {
+function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggleDone, onToggleStarred, onDeleteCase, onDeleteFile }) {
   const role = user.role;
   const stage = caseItem.stage;
   const meta = STAGE_META[stage];
@@ -862,28 +882,28 @@ function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggle
         </div>
 
         <div className="flex items-center gap-2">
-          {role === "admin" ? (
-            <button
-              onClick={() => onToggleDone(caseItem.id, !caseItem.done)}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors"
-              style={{
-                borderColor: caseItem.done ? "#3F7A56" : "#E4E0D8",
-                color: caseItem.done ? "#3F7A56" : "#6B7674",
-                background: caseItem.done ? "#E7F2EA" : "#fff",
-              }}
-            >
-              <CheckCircle2 size={14} /> {caseItem.done ? "تمت الحالة" : "علّم كـ تمت"}
-            </button>
-          ) : (
-            caseItem.done && (
-              <span
-                className="text-xs font-bold px-3 py-1.5 rounded-full border-2"
-                style={{ color: "#3F7A56", borderColor: "#3F7A56", transform: "rotate(-3deg)" }}
-              >
-                ✓ تمت
-              </span>
-            )
-          )}
+          <button
+            onClick={() => onToggleDone(caseItem.id, !caseItem.done)}
+            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors"
+            style={{
+              borderColor: caseItem.done ? "#3F7A56" : "#E4E0D8",
+              color: caseItem.done ? "#3F7A56" : "#6B7674",
+              background: caseItem.done ? "#E7F2EA" : "#fff",
+            }}
+          >
+            <CheckCircle2 size={14} /> {caseItem.done ? "تمت الحالة" : "علّم كـ تمت"}
+          </button>
+          <button
+            onClick={() => onToggleStarred(caseItem.id, !caseItem.starred)}
+            title="علّم بنجمة"
+            className="flex items-center justify-center rounded-full w-8 h-8 border transition-colors"
+            style={{
+              borderColor: caseItem.starred ? "#C6963E" : "#E4E0D8",
+              background: caseItem.starred ? "#FBF3E4" : "#fff",
+            }}
+          >
+            <Star size={14} color={caseItem.starred ? "#C6963E" : "#9AA29F"} fill={caseItem.starred ? "#C6963E" : "none"} />
+          </button>
           {canManage && (
             <button
               onClick={handleDeleteCase}
@@ -1020,7 +1040,7 @@ function FileDropZone({ files, onAdd, onRemove, placeholder = "Choose or drop fi
    كارت حالة فى الليستة
 --------------------------------------------------------------- */
 
-function CaseCard({ item, onOpen, onDownload, showDoctor }) {
+function CaseCard({ item, onOpen, onDownload, showDoctor, isNew }) {
   const meta = STAGE_META[item.stage];
   const [downloading, setDownloading] = useState(false);
 
@@ -1037,18 +1057,33 @@ function CaseCard({ item, onOpen, onDownload, showDoctor }) {
 
   return (
     <div
-      className="w-full text-right rounded-xl border border-[#EFEBE2] bg-white p-4 hover:border-[#1F5C57] transition-colors relative cursor-pointer"
+      className="w-full text-right rounded-xl border bg-white p-4 hover:border-[#1F5C57] transition-colors relative cursor-pointer"
       onClick={onOpen}
-      style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}
+      style={{
+        fontFamily: "'IBM Plex Sans Arabic', sans-serif",
+        borderColor: isNew ? "#1F5C57" : "#EFEBE2",
+        borderWidth: isNew ? 1.5 : 1,
+      }}
     >
-      {item.done && (
-        <span
-          className="absolute left-3 top-3 text-[10px] font-bold px-2 py-0.5 rounded-full border-2"
-          style={{ color: "#3F7A56", borderColor: "#3F7A56", transform: "rotate(-4deg)" }}
-        >
-          ✓ تمت
-        </span>
-      )}
+      <div className="absolute left-3 top-3 flex items-center gap-1.5">
+        {isNew && (
+          <span
+            className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+            style={{ background: "#1F5C57" }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> جديدة
+          </span>
+        )}
+        {item.starred && <Star size={14} color="#C6963E" fill="#C6963E" />}
+        {item.done && (
+          <span
+            className="text-[10px] font-bold px-2 py-0.5 rounded-full border-2"
+            style={{ color: "#3F7A56", borderColor: "#3F7A56", transform: "rotate(-4deg)" }}
+          >
+            ✓ تمت
+          </span>
+        )}
+      </div>
       <div className="flex items-center gap-1.5 mb-1.5">
         <span
           className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
@@ -1129,6 +1164,7 @@ function StageHome({ user, index, onSelectStage }) {
 function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase, onDownload, sortMode, setSortMode }) {
   const meta = STAGE_META[stage];
   const isAdminFinal = user.role === "admin" && stage === "final";
+  const viewedIds = useMemo(() => getViewedCaseIds(user.id), [user.id, index]);
 
   const [reportMonth, setReportMonth] = useState("");
   const [reportDoctor, setReportDoctor] = useState("");
@@ -1295,7 +1331,14 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
           {visibleCases.map((c) => (
-            <CaseCard key={c.id} item={c} onOpen={() => onOpenCase(c.id)} onDownload={onDownload} showDoctor />
+            <CaseCard
+              key={c.id}
+              item={c}
+              onOpen={() => onOpenCase(c.id)}
+              onDownload={onDownload}
+              showDoctor
+              isNew={!viewedIds.has(c.id)}
+            />
           ))}
         </div>
       )}
@@ -1332,6 +1375,7 @@ function Dashboard({ user, onLogout }) {
           uploadedBy: c.uploaded_by,
           createdAt: c.created_at,
           done: c.done,
+          starred: c.starred,
           crownCount: c.crown_count,
           priceType: c.price_type,
         }))
@@ -1444,6 +1488,11 @@ function Dashboard({ user, onLogout }) {
     setIndex((prev) => prev.map((c) => (c.id === caseId ? { ...c, done } : c)));
   };
 
+  const toggleStarred = async (caseId, starred) => {
+    await supabase.from("cases").update({ starred }).eq("id", caseId);
+    setIndex((prev) => prev.map((c) => (c.id === caseId ? { ...c, starred } : c)));
+  };
+
   const createCase = async ({ doctorName, caseName, note, crownCount, shade, priceType, files }) => {
     const { data: newCase, error: caseError } = await supabase
       .from("cases")
@@ -1503,6 +1552,7 @@ function Dashboard({ user, onLogout }) {
   };
 
   const openCase = (id) => {
+    markCaseViewed(user.id, id);
     setSelectedId(id);
     setScreen("detail");
   };
@@ -1556,6 +1606,7 @@ function Dashboard({ user, onLogout }) {
             onLoadStage={loadStage}
             onSaveStage={saveStage}
             onToggleDone={toggleDone}
+            onToggleStarred={toggleStarred}
             onDeleteCase={deleteCase}
             onDeleteFile={deleteFile}
           />
