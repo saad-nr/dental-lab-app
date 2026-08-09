@@ -84,6 +84,17 @@ function formatDate(iso) {
   }
 }
 
+function formatDateTime(iso) {
+  try {
+    const d = new Date(iso);
+    const datePart = d.toLocaleDateString("ar-EG", { day: "numeric", month: "short", year: "numeric" });
+    const timePart = d.toLocaleTimeString("ar-EG", { hour: "numeric", minute: "2-digit" });
+    return `${datePart} - ${timePart}`;
+  } catch {
+    return "";
+  }
+}
+
 function getViewedCaseIds(userId) {
   try {
     const raw = localStorage.getItem(`viewed-cases:${userId}`);
@@ -902,8 +913,11 @@ function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggle
           <p className="text-sm text-[#6B7674] flex items-center gap-1.5 mt-1">
             <UserRound size={13} /> {caseItem.doctorName}
             <span className="mx-1">·</span>
-            <Calendar size={13} /> {formatDate(caseItem.createdAt)}
+            <Calendar size={13} /> {formatDateTime(caseItem.createdAt)}
           </p>
+          {caseItem.uploaderName && (
+            <p className="text-xs text-[#9AA29F] mt-0.5">بواسطة {caseItem.uploaderName}</p>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -967,7 +981,7 @@ function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggle
             {record.shade && <DataRow label="Shade" value={record.shade} />}
             {record.priceType && <DataRow label="Price" value={`${record.priceType} — ${PRICE_LIST[record.priceType] || 0} × ${record.crownCount || 0} = ${(PRICE_LIST[record.priceType] || 0) * (record.crownCount || 0)}`} />}
             {record.note && <DataRow label="Note" value={record.note} />}
-            <DataRow label="تاريخ الرفع" value={formatDate(record.uploadedAt)} />
+            <DataRow label="تاريخ الرفع" value={formatDateTime(record.uploadedAt)} />
             {record.files.length === 0 ? (
               <p className="text-xs text-[#9AA29F] mt-3">مفيش ملفات مرفوعة</p>
             ) : (
@@ -1129,7 +1143,7 @@ function CaseCard({ item, onOpen, onDownload, showDoctor, isNew }) {
       )}
       <div className="flex items-center justify-between mt-1.5">
         <p className="text-xs text-[#9AA29F] flex items-center gap-1">
-          <Calendar size={12} /> {formatDate(item.createdAt)}
+          <Calendar size={12} /> {formatDateTime(item.createdAt)}
         </p>
         <button
           onClick={handleDownload}
@@ -1394,24 +1408,29 @@ function Dashboard({ user, onLogout }) {
 
   const loadIndex = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("cases").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("cases")
+      .select("*, profiles(name)")
+      .order("created_at", { ascending: false });
+    let mapped = [];
     if (!error && data) {
-      setIndex(
-        data.map((c) => ({
-          id: c.id,
-          stage: c.stage,
-          doctorName: c.doctor_name,
-          caseName: c.case_name,
-          uploadedBy: c.uploaded_by,
-          createdAt: c.created_at,
-          done: c.done,
-          starred: c.starred,
-          crownCount: c.crown_count,
-          priceType: c.price_type,
-        }))
-      );
+      mapped = data.map((c) => ({
+        id: c.id,
+        stage: c.stage,
+        doctorName: c.doctor_name,
+        caseName: c.case_name,
+        uploadedBy: c.uploaded_by,
+        uploaderName: c.profiles?.name || "",
+        createdAt: c.created_at,
+        done: c.done,
+        starred: c.starred,
+        crownCount: c.crown_count,
+        priceType: c.price_type,
+      }));
+      setIndex(mapped);
     }
     setLoading(false);
+    return mapped;
   }, []);
 
   useEffect(() => {
@@ -1419,37 +1438,45 @@ function Dashboard({ user, onLogout }) {
   }, [loadIndex]);
 
   useEffect(() => {
-    if (user.role !== "user") return;
-
     const channel = supabase
-      .channel(`case-files-notify-${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "case_files" }, (payload) => {
+      .channel(`case-updates-${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "case_files" }, async (payload) => {
         const caseId = payload.new?.case_id;
-        if (!caseId) return;
+        await loadIndex(); // keep everyone's list live without needing a manual refresh
+        if (user.role !== "user" || !caseId) return;
         const myCase = indexRef.current.find((c) => c.id === caseId && c.uploadedBy === user.id);
         if (!myCase) return;
         if (caseId === selectedIdRef.current) return; // already looking at it
 
-        setToast(`الأدمن رفع ملف على حالة "${myCase.caseName}"`);
+        const when = formatDateTime(payload.new.uploaded_at || new Date().toISOString());
+        setToast(`الأدمن رفع ملف على حالة "${myCase.caseName}" — ${when}`);
         playNotificationSound();
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "cases" }, (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "cases" }, async (payload) => {
         const newCase = payload.new;
-        if (!newCase || newCase.uploaded_by === user.id) return; // ignore my own creations
+        const freshIndex = await loadIndex(); // keep everyone's list live without needing a manual refresh
+        if (user.role !== "user" || !newCase || newCase.uploaded_by === user.id) return;
         if (newCase.stage !== "final" || !USER_VISIBLE_PRICE_TYPES.includes(newCase.price_type)) return;
 
-        setToast(`حالة جديدة وصلتلك — ${newCase.doctor_name}: "${newCase.case_name}"`);
+        const full = freshIndex.find((c) => c.id === newCase.id);
+        const senderName = full?.uploaderName || "الأدمن";
+        const when = formatDateTime(newCase.created_at);
+        setToast(`حالة جديدة من ${senderName} — ${when} — ${newCase.doctor_name}: "${newCase.case_name}"`);
         playNotificationSound();
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "cases" }, (payload) => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "cases" }, async (payload) => {
         const updated = payload.new;
         const before = payload.old;
-        if (!updated || updated.uploaded_by === user.id) return;
+        const freshIndex = await loadIndex(); // keep everyone's list live without needing a manual refresh
+        if (user.role !== "user" || !updated || updated.uploaded_by === user.id) return;
         const nowVisible = updated.stage === "final" && USER_VISIBLE_PRICE_TYPES.includes(updated.price_type);
         const wasVisible = before?.stage === "final" && USER_VISIBLE_PRICE_TYPES.includes(before?.price_type);
         if (!nowVisible || wasVisible) return; // only notify the moment it becomes visible
 
-        setToast(`حالة جديدة وصلتلك — ${updated.doctor_name}: "${updated.case_name}"`);
+        const full = freshIndex.find((c) => c.id === updated.id);
+        const senderName = full?.uploaderName || "الأدمن";
+        const when = formatDateTime(updated.created_at);
+        setToast(`حالة جديدة من ${senderName} — ${when} — ${updated.doctor_name}: "${updated.case_name}"`);
         playNotificationSound();
       })
       .subscribe();
@@ -1457,7 +1484,7 @@ function Dashboard({ user, onLogout }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user.id, user.role]);
+  }, [user.id, user.role, loadIndex]);
 
   useEffect(() => {
     if (!toast) return;
