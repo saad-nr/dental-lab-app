@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Trash2,
   Star,
+  Bell,
 } from "lucide-react";
 
 /* ---------------------------------------------------------------
@@ -99,6 +100,30 @@ function markCaseViewed(userId, caseId) {
     localStorage.setItem(`viewed-cases:${userId}`, JSON.stringify([...set]));
   } catch {
     // best-effort only
+  }
+}
+
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    const playTone = (freq, start, duration) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, now + start);
+      gain.gain.linearRampToValueAtTime(0.2, now + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + start + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + start);
+      osc.stop(now + start + duration + 0.05);
+    };
+    playTone(880, 0, 0.15);
+    playTone(1320, 0.15, 0.22);
+  } catch {
+    // audio not available — ignore silently
   }
 }
 
@@ -1359,6 +1384,11 @@ function Dashboard({ user, onLogout }) {
   const [showNewCase, setShowNewCase] = useState(false);
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState("done"); // 'done' | 'date'
+  const [toast, setToast] = useState(null);
+  const indexRef = React.useRef(index);
+  const selectedIdRef = React.useRef(selectedId);
+  indexRef.current = index;
+  selectedIdRef.current = selectedId;
 
   const doctorSuggestions = useMemo(() => [...new Set(index.map((c) => c.doctorName).filter(Boolean))].sort(), [index]);
 
@@ -1387,6 +1417,53 @@ function Dashboard({ user, onLogout }) {
   useEffect(() => {
     loadIndex();
   }, [loadIndex]);
+
+  useEffect(() => {
+    if (user.role !== "user") return;
+
+    const channel = supabase
+      .channel(`case-files-notify-${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "case_files" }, (payload) => {
+        const caseId = payload.new?.case_id;
+        if (!caseId) return;
+        const myCase = indexRef.current.find((c) => c.id === caseId && c.uploadedBy === user.id);
+        if (!myCase) return;
+        if (caseId === selectedIdRef.current) return; // already looking at it
+
+        setToast(`الأدمن رفع ملف على حالة "${myCase.caseName}"`);
+        playNotificationSound();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "cases" }, (payload) => {
+        const newCase = payload.new;
+        if (!newCase || newCase.uploaded_by === user.id) return; // ignore my own creations
+        if (newCase.stage !== "final" || !USER_VISIBLE_PRICE_TYPES.includes(newCase.price_type)) return;
+
+        setToast(`حالة جديدة وصلتلك — ${newCase.doctor_name}: "${newCase.case_name}"`);
+        playNotificationSound();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "cases" }, (payload) => {
+        const updated = payload.new;
+        const before = payload.old;
+        if (!updated || updated.uploaded_by === user.id) return;
+        const nowVisible = updated.stage === "final" && USER_VISIBLE_PRICE_TYPES.includes(updated.price_type);
+        const wasVisible = before?.stage === "final" && USER_VISIBLE_PRICE_TYPES.includes(before?.price_type);
+        if (!nowVisible || wasVisible) return; // only notify the moment it becomes visible
+
+        setToast(`حالة جديدة وصلتلك — ${updated.doctor_name}: "${updated.case_name}"`);
+        playNotificationSound();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user.id, user.role]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const loadStage = useCallback(async (caseId, stage) => {
     const [{ data: meta }, { data: files }] = await Promise.all([
@@ -1559,6 +1636,12 @@ function Dashboard({ user, onLogout }) {
 
   return (
     <div dir="rtl" className="min-h-screen" style={{ background: "#F6F3EE", fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-lg" style={{ background: "#1F5C57" }}>
+          <Bell size={15} />
+          {toast}
+        </div>
+      )}
       {/* top bar */}
       <div className="border-b border-[#EFEBE2] bg-white">
         <div className="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
