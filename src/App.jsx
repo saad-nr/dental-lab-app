@@ -1130,6 +1130,11 @@ function CaseCard({ item, onOpen, onDownload, showDoctor, isNew }) {
         >
           {meta.labelEn}
         </span>
+        {item.crownCount != null && (
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full text-[#6B7674] bg-[#F3F1EC]">
+            N.O.C. {item.crownCount}
+          </span>
+        )}
       </div>
       {showDoctor ? (
         <>
@@ -1204,6 +1209,7 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
   const meta = STAGE_META[stage];
   const isAdminFinal = user.role === "admin" && stage === "final";
   const viewedIds = useMemo(() => getViewedCaseIds(user.id), [user.id, index]);
+  const [query, setQuery] = useState("");
 
   const [reportMonth, setReportMonth] = useState("");
   const [reportDoctor, setReportDoctor] = useState("");
@@ -1217,8 +1223,12 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
     if (stage === "final" && user.role !== "admin") {
       list = list.filter((c) => c.priceType && USER_VISIBLE_PRICE_TYPES.includes(c.priceType));
     }
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      list = list.filter((c) => c.doctorName.toLowerCase().includes(q) || c.caseName.toLowerCase().includes(q));
+    }
     return list;
-  }, [index, stage, user.role]);
+  }, [index, stage, user.role, query]);
 
   const visibleCases = useMemo(() => {
     return [...baseCases].sort((a, b) => {
@@ -1264,19 +1274,17 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          {user.role === "admin" && (
-            <div className="relative">
-              <select
-                value={sortMode}
-                onChange={(e) => setSortMode(e.target.value)}
-                className="appearance-none rounded-lg border border-[#E4E0D8] bg-white pl-8 pr-3 py-2 text-sm outline-none focus:border-[#1F5C57]"
-              >
-                <option value="done">غير المكتملة أولاً</option>
-                <option value="date">الأحدث أولاً</option>
-              </select>
-              <ChevronDown size={14} className="absolute left-2.5 top-2.5 pointer-events-none text-[#6B7674]" />
-            </div>
-          )}
+          <div className="relative">
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value)}
+              className="appearance-none rounded-lg border border-[#E4E0D8] bg-white pl-8 pr-3 py-2 text-sm outline-none focus:border-[#1F5C57]"
+            >
+              <option value="done">غير المكتملة أولاً</option>
+              <option value="date">الأحدث أولاً</option>
+            </select>
+            <ChevronDown size={14} className="absolute left-2.5 top-2.5 pointer-events-none text-[#6B7674]" />
+          </div>
           <button
             onClick={onNewCase}
             className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-white"
@@ -1285,6 +1293,15 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
             <Plus size={15} /> حالة جديدة
           </button>
         </div>
+      </div>
+
+      <div className="relative mb-5">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="ابحث باسم الدكتور أو اسم الحالة..."
+          className="w-full rounded-lg border border-[#E4E0D8] px-3 py-2 text-sm outline-none focus:border-[#1F5C57] bg-white"
+        />
       </div>
 
       {isAdminFinal && (
@@ -1464,20 +1481,8 @@ function Dashboard({ user, onLogout }) {
         setToast(`حالة جديدة من ${senderName} — ${when} — ${newCase.doctor_name}: "${newCase.case_name}"`);
         playNotificationSound();
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "cases" }, async (payload) => {
-        const updated = payload.new;
-        const before = payload.old;
-        const freshIndex = await loadIndex(); // keep everyone's list live without needing a manual refresh
-        if (user.role !== "user" || !updated || updated.uploaded_by === user.id) return;
-        const nowVisible = updated.stage === "final" && USER_VISIBLE_PRICE_TYPES.includes(updated.price_type);
-        const wasVisible = before?.stage === "final" && USER_VISIBLE_PRICE_TYPES.includes(before?.price_type);
-        if (!nowVisible || wasVisible) return; // only notify the moment it becomes visible
-
-        const full = freshIndex.find((c) => c.id === updated.id);
-        const senderName = full?.uploaderName || "الأدمن";
-        const when = formatDateTime(updated.created_at);
-        setToast(`حالة جديدة من ${senderName} — ${when} — ${updated.doctor_name}: "${updated.case_name}"`);
-        playNotificationSound();
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "cases" }, async () => {
+        await loadIndex(); // keep everyone's list live without needing a manual refresh
       })
       .subscribe();
 
