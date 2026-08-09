@@ -61,6 +61,13 @@ const PRICE_LIST = {
 const PRICE_TYPES = Object.keys(PRICE_LIST);
 const USER_VISIBLE_PRICE_TYPES = ["XT", "Mono", "Multi", "Zolid", "Zolid Ultra", "PMMA Milled"];
 
+const PRICE_TYPE_COLORS = {
+  Multi: { border: "#3F7A56", bg: "#E7F2EA", text: "#3F7A56" }, // أخضر
+  Zolid: { border: "#3A6EA5", bg: "#EAF1FA", text: "#3A6EA5" }, // أزرق
+  "Zolid Ultra": { border: "#8B5E3C", bg: "#F1E7DC", text: "#8B5E3C" }, // بني
+  "PMMA Milled": { border: "#C6963E", bg: "#FBF3E4", text: "#C6963E" }, // أصفر
+};
+
 const STAGES = ["final", "prova", "design"];
 
 const STAGE_META = {
@@ -1082,6 +1089,7 @@ function FileDropZone({ files, onAdd, onRemove, placeholder = "Choose or drop fi
 function CaseCard({ item, onOpen, onDownload, showDoctor, isNew }) {
   const meta = STAGE_META[item.stage];
   const [downloading, setDownloading] = useState(false);
+  const priceColor = item.priceType ? PRICE_TYPE_COLORS[item.priceType] : null;
 
   const handleDownload = async (e) => {
     e.stopPropagation();
@@ -1100,8 +1108,9 @@ function CaseCard({ item, onOpen, onDownload, showDoctor, isNew }) {
       onClick={onOpen}
       style={{
         fontFamily: "'IBM Plex Sans Arabic', sans-serif",
-        borderColor: isNew ? "#1F5C57" : "#EFEBE2",
-        borderWidth: isNew ? 1.5 : 1,
+        borderColor: priceColor ? priceColor.border : isNew ? "#1F5C57" : "#EFEBE2",
+        borderWidth: priceColor || isNew ? 1.5 : 1,
+        background: priceColor ? priceColor.bg : "#fff",
       }}
     >
       <div className="absolute left-3 top-3 flex items-center gap-1.5">
