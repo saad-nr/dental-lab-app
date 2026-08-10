@@ -60,7 +60,7 @@ const PRICE_LIST = {
   "Scanner": 200,
 };
 const PRICE_TYPES = Object.keys(PRICE_LIST);
-const USER_VISIBLE_PRICE_TYPES = ["XT", "Mono", "Multi", "Zolid", "Zolid Ultra", "PMMA Milled","Remark"];
+const USER_VISIBLE_PRICE_TYPES = ["XT", "Mono", "Multi", "Zolid", "Zolid Ultra", "PMMA Milled","Remark","fath"];
 
 const PRICE_TYPE_COLORS = {
   Multi: { border: "#3F7A56", bg: "#E7F2EA", text: "#3F7A56" }, // أخضر
