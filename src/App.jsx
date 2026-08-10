@@ -35,6 +35,7 @@ const SHADES = [
 ];
 
 const PRICE_LIST = {
+  "0": 0,
   "XT": 350,
   "Mono": 450,
   "Multi": 650,
@@ -1500,12 +1501,6 @@ function Dashboard({ user, onLogout }) {
     };
   }, [user.id, user.role, loadIndex]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 5000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   const loadStage = useCallback(async (caseId, stage) => {
     const [{ data: meta }, { data: files }] = await Promise.all([
       supabase.from("case_stage_files").select("*").eq("case_id", caseId).eq("stage", stage).maybeSingle(),
@@ -1678,9 +1673,12 @@ function Dashboard({ user, onLogout }) {
   return (
     <div dir="rtl" className="min-h-screen" style={{ background: "#F6F3EE", fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
       {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-lg" style={{ background: "#1F5C57" }}>
-          <Bell size={15} />
-          {toast}
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-lg max-w-[92vw]" style={{ background: "#1F5C57" }}>
+          <Bell size={15} className="shrink-0" />
+          <span className="truncate">{toast}</span>
+          <button onClick={() => setToast(null)} className="shrink-0 opacity-80 hover:opacity-100">
+            <X size={15} />
+          </button>
         </div>
       )}
       {/* top bar */}
