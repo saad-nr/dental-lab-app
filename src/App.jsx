@@ -1157,9 +1157,16 @@ function CaseCard({ item, onOpen, onDownload, showDoctor, isNew }) {
         <p className="text-base text-[#22302E] font-semibold mb-1">{item.caseName}</p>
       )}
       <div className="flex items-center justify-between mt-1.5">
-        <p className="text-xs text-[#9AA29F] flex items-center gap-1">
-          <Calendar size={12} /> {formatDateTime(item.createdAt)}
-        </p>
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xs text-[#9AA29F] flex items-center gap-1">
+            <Calendar size={12} /> {formatDateTime(item.createdAt)}
+          </p>
+          {item.uploaderName && (
+            <p className="text-[11px] text-[#9AA29F] flex items-center gap-1">
+              <UserRound size={11} /> {item.uploaderName}
+            </p>
+          )}
+        </div>
         <button
           onClick={handleDownload}
           disabled={downloading}
@@ -1556,7 +1563,12 @@ function Dashboard({ user, onLogout }) {
 
       await supabase
         .from("cases")
-        .update({ crown_count: record.crownCount, price_type: record.priceType || null })
+        .update({
+          doctor_name: record.doctorName,
+          case_name: record.caseName,
+          crown_count: record.crownCount,
+          price_type: record.priceType || null,
+        })
         .eq("id", caseId);
 
       if (record.files && record.files.length) {
