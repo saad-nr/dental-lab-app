@@ -458,6 +458,7 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
   const [crownCount, setCrownCount] = useState(initial?.crownCount != null ? String(initial.crownCount) : "");
   const [shade, setShade] = useState(initial?.shade || SHADES[0]);
   const [priceType, setPriceType] = useState(initial?.priceType || PRICE_TYPES[0]);
+  const [scanner, setScanner] = useState(initial?.scanner || false);
   const [note, setNote] = useState(initial?.note || "");
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
@@ -485,6 +486,7 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
         crownCount: Number(crownCount),
         shade,
         priceType: stage === "final" ? priceType : null,
+        scanner,
         note: note.trim(),
         files,
       };
@@ -573,6 +575,17 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
             className="w-full rounded-lg border border-[#E4E0D8] px-2.5 py-2 text-sm outline-none focus:border-[#1F5C57] bg-white"
           />
         </div>
+        <div className="col-span-2">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={scanner}
+              onChange={(e) => setScanner(e.target.checked)}
+              className="w-4 h-4 accent-[#1F5C57]"
+            />
+            <span className="text-sm text-[#22302E]">Scanner</span>
+          </label>
+        </div>
       </div>
 
       <FileDropZone files={files} onAdd={addFiles} onRemove={removeFile} placeholder="Choose case files (optional)" />
@@ -600,6 +613,7 @@ function NewCaseForm({ onCreated, onClose, doctorSuggestions }) {
   const [doctorName, setDoctorName] = useState("");
   const [caseName, setCaseName] = useState("");
   const [note, setNote] = useState("");
+  const [scanner, setScanner] = useState(false);
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -624,6 +638,7 @@ function NewCaseForm({ onCreated, onClose, doctorSuggestions }) {
         doctorName: doctorName.trim(),
         caseName: caseName.trim(),
         note: note.trim(),
+        scanner,
         files,
       });
     } catch (e) {
@@ -674,6 +689,16 @@ function NewCaseForm({ onCreated, onClose, doctorSuggestions }) {
           className="w-full rounded-lg border border-[#E4E0D8] px-3 py-2 text-sm mb-3 outline-none focus:border-[#1F5C57]"
         />
 
+        <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={scanner}
+            onChange={(e) => setScanner(e.target.checked)}
+            className="w-4 h-4 accent-[#1F5C57]"
+          />
+          <span className="text-sm text-[#22302E]">Scanner</span>
+        </label>
+
         <FileDropZone files={files} onAdd={addFiles} onRemove={removeFile} placeholder="Upload one or more files" />
 
         {error && <p className="text-xs text-[#B1503F] mt-2">{error}</p>}
@@ -702,6 +727,7 @@ function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
   const [crownCount, setCrownCount] = useState("");
   const [shade, setShade] = useState(SHADES[0]);
   const [priceType, setPriceType] = useState(PRICE_TYPES[0]);
+  const [scanner, setScanner] = useState(false);
   const [note, setNote] = useState("");
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
@@ -729,6 +755,7 @@ function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
         crownCount: Number(crownCount),
         shade,
         priceType: stage === "final" ? priceType : null,
+        scanner,
         note: note.trim(),
         files,
       });
@@ -827,6 +854,17 @@ function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
               placeholder="Optional"
               className="w-full rounded-lg border border-[#E4E0D8] px-2.5 py-2 text-sm outline-none focus:border-[#1F5C57]"
             />
+          </div>
+          <div className="col-span-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={scanner}
+                onChange={(e) => setScanner(e.target.checked)}
+                className="w-4 h-4 accent-[#1F5C57]"
+              />
+              <span className="text-sm text-[#22302E]">Scanner</span>
+            </label>
           </div>
         </div>
 
@@ -1124,6 +1162,9 @@ function CaseCard({ item, onOpen, onDownload, showDoctor, isNew }) {
           </span>
         )}
         {item.starred && <Star size={14} color="#C6963E" fill="#C6963E" />}
+        {item.scanner && (
+          <span title="Scanner" className="w-2.5 h-2.5 rounded-full" style={{ background: "#7C4DBF" }} />
+        )}
         {item.done && (
           <span
             className="text-[10px] font-bold px-2 py-0.5 rounded-full border-2"
@@ -1271,7 +1312,9 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
       .map((c) => {
         const price = PRICE_LIST[c.priceType] || 0;
         const crowns = c.crownCount || 0;
-        return { id: c.id, caseName: c.caseName, crownCount: crowns, price, total: price * crowns };
+        const scanner = !!c.scanner;
+        const scannerTotal = scanner ? 50 * crowns : 0;
+        return { id: c.id, caseName: c.caseName, crownCount: crowns, price, scanner, scannerTotal, total: price * crowns + scannerTotal };
       });
   }, [monthCases, reportDoctor]);
 
@@ -1361,6 +1404,7 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
                     <th className="text-right py-1.5 pr-2">Patient</th>
                     <th className="text-right py-1.5 px-2">N.O.C.</th>
                     <th className="text-right py-1.5 px-2">Price</th>
+                    <th className="text-right py-1.5 px-2">Scanner</th>
                     <th className="text-right py-1.5 pl-2">Total</th>
                   </tr>
                 </thead>
@@ -1370,13 +1414,16 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
                       <td className="py-1.5 pr-2 text-[#22302E]">{r.caseName}</td>
                       <td className="py-1.5 px-2 text-[#22302E]">{r.crownCount}</td>
                       <td className="py-1.5 px-2 text-[#22302E]">{r.price}</td>
+                      <td className="py-1.5 px-2 font-semibold" style={{ color: r.scannerTotal ? "#7C4DBF" : "#9AA29F" }}>
+                        {r.scannerTotal || 0}
+                      </td>
                       <td className="py-1.5 pl-2 text-[#22302E] font-semibold">{r.total}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={3} className="py-2 pr-2 text-[#6B7674] font-semibold">
+                    <td colSpan={4} className="py-2 pr-2 text-[#6B7674] font-semibold">
                       الإجمالي
                     </td>
                     <td className="py-2 pl-2 font-bold" style={{ color: "#1F5C57" }}>
@@ -1460,6 +1507,7 @@ function Dashboard({ user, onLogout }) {
         starred: c.starred,
         crownCount: c.crown_count,
         priceType: c.price_type,
+        scanner: c.scanner,
       }));
       setIndex(mapped);
     }
@@ -1520,6 +1568,7 @@ function Dashboard({ user, onLogout }) {
       crownCount: meta.crown_count,
       shade: meta.shade,
       priceType: meta.price_type,
+      scanner: meta.scanner,
       note: meta.note,
       uploadedAt: meta.uploaded_at,
       files: (files || []).map((f) => ({
@@ -1554,6 +1603,7 @@ function Dashboard({ user, onLogout }) {
           crown_count: record.crownCount,
           shade: record.shade,
           price_type: record.priceType || null,
+          scanner: record.scanner || false,
           note: record.note || null,
           uploaded_at: new Date().toISOString(),
         },
@@ -1568,6 +1618,7 @@ function Dashboard({ user, onLogout }) {
           case_name: record.caseName,
           crown_count: record.crownCount,
           price_type: record.priceType || null,
+          scanner: record.scanner || false,
         })
         .eq("id", caseId);
 
@@ -1618,7 +1669,7 @@ function Dashboard({ user, onLogout }) {
     setIndex((prev) => prev.map((c) => (c.id === caseId ? { ...c, starred } : c)));
   };
 
-  const createCase = async ({ doctorName, caseName, note, crownCount, shade, priceType, files }) => {
+  const createCase = async ({ doctorName, caseName, note, crownCount, shade, priceType, scanner, files }) => {
     const { data: newCase, error: caseError } = await supabase
       .from("cases")
       .insert({
@@ -1629,6 +1680,7 @@ function Dashboard({ user, onLogout }) {
         done: false,
         crown_count: crownCount != null ? crownCount : null,
         price_type: priceType || null,
+        scanner: scanner || false,
       })
       .select()
       .single();
@@ -1642,6 +1694,7 @@ function Dashboard({ user, onLogout }) {
       crown_count: crownCount != null ? crownCount : null,
       shade: shade || null,
       price_type: priceType || null,
+      scanner: scanner || false,
       note: note || null,
       uploaded_at: new Date().toISOString(),
     });
