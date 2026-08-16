@@ -459,6 +459,7 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
   const [shade, setShade] = useState(initial?.shade || SHADES[0]);
   const [priceType, setPriceType] = useState(initial?.priceType || PRICE_TYPES[0]);
   const [scanner, setScanner] = useState(initial?.scanner || false);
+  const [urgent, setUrgent] = useState(initial?.urgent || false);
   const [note, setNote] = useState(initial?.note || "");
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
@@ -487,6 +488,7 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
         shade,
         priceType: stage === "final" ? priceType : null,
         scanner,
+        urgent,
         note: note.trim(),
         files,
       };
@@ -575,7 +577,7 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
             className="w-full rounded-lg border border-[#E4E0D8] px-2.5 py-2 text-sm outline-none focus:border-[#1F5C57] bg-white"
           />
         </div>
-        <div className="col-span-2">
+        <div className="col-span-2 flex items-center gap-5">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -584,6 +586,15 @@ function AdminUploadForm({ stage, caseItem, initial, onDone }) {
               className="w-4 h-4 accent-[#1F5C57]"
             />
             <span className="text-sm text-[#22302E]">Scanner</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={urgent}
+              onChange={(e) => setUrgent(e.target.checked)}
+              className="w-4 h-4 accent-[#C0392B]"
+            />
+            <span className="text-sm text-[#22302E]">Urgent</span>
           </label>
         </div>
       </div>
@@ -614,6 +625,7 @@ function NewCaseForm({ onCreated, onClose, doctorSuggestions }) {
   const [caseName, setCaseName] = useState("");
   const [note, setNote] = useState("");
   const [scanner, setScanner] = useState(false);
+  const [urgent, setUrgent] = useState(false);
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -639,6 +651,7 @@ function NewCaseForm({ onCreated, onClose, doctorSuggestions }) {
         caseName: caseName.trim(),
         note: note.trim(),
         scanner,
+        urgent,
         files,
       });
     } catch (e) {
@@ -689,15 +702,26 @@ function NewCaseForm({ onCreated, onClose, doctorSuggestions }) {
           className="w-full rounded-lg border border-[#E4E0D8] px-3 py-2 text-sm mb-3 outline-none focus:border-[#1F5C57]"
         />
 
-        <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={scanner}
-            onChange={(e) => setScanner(e.target.checked)}
-            className="w-4 h-4 accent-[#1F5C57]"
-          />
-          <span className="text-sm text-[#22302E]">Scanner</span>
-        </label>
+        <div className="flex items-center gap-5 mb-3">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={scanner}
+              onChange={(e) => setScanner(e.target.checked)}
+              className="w-4 h-4 accent-[#1F5C57]"
+            />
+            <span className="text-sm text-[#22302E]">Scanner</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={urgent}
+              onChange={(e) => setUrgent(e.target.checked)}
+              className="w-4 h-4 accent-[#C0392B]"
+            />
+            <span className="text-sm text-[#22302E]">Urgent</span>
+          </label>
+        </div>
 
         <FileDropZone files={files} onAdd={addFiles} onRemove={removeFile} placeholder="Upload one or more files" />
 
@@ -728,6 +752,7 @@ function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
   const [shade, setShade] = useState(SHADES[0]);
   const [priceType, setPriceType] = useState(PRICE_TYPES[0]);
   const [scanner, setScanner] = useState(false);
+  const [urgent, setUrgent] = useState(false);
   const [note, setNote] = useState("");
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
@@ -756,6 +781,7 @@ function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
         shade,
         priceType: stage === "final" ? priceType : null,
         scanner,
+        urgent,
         note: note.trim(),
         files,
       });
@@ -855,7 +881,7 @@ function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
               className="w-full rounded-lg border border-[#E4E0D8] px-2.5 py-2 text-sm outline-none focus:border-[#1F5C57]"
             />
           </div>
-          <div className="col-span-2">
+          <div className="col-span-2 flex items-center gap-5">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -864,6 +890,15 @@ function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
                 className="w-4 h-4 accent-[#1F5C57]"
               />
               <span className="text-sm text-[#22302E]">Scanner</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={urgent}
+                onChange={(e) => setUrgent(e.target.checked)}
+                className="w-4 h-4 accent-[#C0392B]"
+              />
+              <span className="text-sm text-[#22302E]">Urgent</span>
             </label>
           </div>
         </div>
@@ -1147,8 +1182,8 @@ function CaseCard({ item, onOpen, onDownload, showDoctor, isNew }) {
       onClick={onOpen}
       style={{
         fontFamily: "'IBM Plex Sans Arabic', sans-serif",
-        borderColor: priceColor ? priceColor.border : isNew ? "#1F5C57" : "#EFEBE2",
-        borderWidth: priceColor || isNew ? 1.5 : 1,
+        borderColor: item.urgent ? "#C0392B" : priceColor ? priceColor.border : isNew ? "#1F5C57" : "#EFEBE2",
+        borderWidth: item.urgent || priceColor || isNew ? 1.5 : 1,
         background: priceColor ? priceColor.bg : "#fff",
       }}
     >
@@ -1162,8 +1197,14 @@ function CaseCard({ item, onOpen, onDownload, showDoctor, isNew }) {
           </span>
         )}
         {item.starred && <Star size={14} color="#C6963E" fill="#C6963E" />}
-        {item.scanner && (
-          <span title="Scanner" className="w-2.5 h-2.5 rounded-full" style={{ background: "#7C4DBF" }} />
+        {item.urgent && (
+          <span
+            title="Urgent"
+            className="flex items-center justify-center w-4 h-4 rounded-full text-white text-[10px] font-bold"
+            style={{ background: "#C0392B" }}
+          >
+            !
+          </span>
         )}
         {item.done && (
           <span
@@ -1508,6 +1549,7 @@ function Dashboard({ user, onLogout }) {
         crownCount: c.crown_count,
         priceType: c.price_type,
         scanner: c.scanner,
+        urgent: c.urgent,
       }));
       setIndex(mapped);
     }
@@ -1569,6 +1611,7 @@ function Dashboard({ user, onLogout }) {
       shade: meta.shade,
       priceType: meta.price_type,
       scanner: meta.scanner,
+      urgent: meta.urgent,
       note: meta.note,
       uploadedAt: meta.uploaded_at,
       files: (files || []).map((f) => ({
@@ -1604,6 +1647,7 @@ function Dashboard({ user, onLogout }) {
           shade: record.shade,
           price_type: record.priceType || null,
           scanner: record.scanner || false,
+          urgent: record.urgent || false,
           note: record.note || null,
           uploaded_at: new Date().toISOString(),
         },
@@ -1619,6 +1663,7 @@ function Dashboard({ user, onLogout }) {
           crown_count: record.crownCount,
           price_type: record.priceType || null,
           scanner: record.scanner || false,
+          urgent: record.urgent || false,
         })
         .eq("id", caseId);
 
@@ -1669,7 +1714,7 @@ function Dashboard({ user, onLogout }) {
     setIndex((prev) => prev.map((c) => (c.id === caseId ? { ...c, starred } : c)));
   };
 
-  const createCase = async ({ doctorName, caseName, note, crownCount, shade, priceType, scanner, files }) => {
+  const createCase = async ({ doctorName, caseName, note, crownCount, shade, priceType, scanner, urgent, files }) => {
     const { data: newCase, error: caseError } = await supabase
       .from("cases")
       .insert({
@@ -1681,6 +1726,7 @@ function Dashboard({ user, onLogout }) {
         crown_count: crownCount != null ? crownCount : null,
         price_type: priceType || null,
         scanner: scanner || false,
+        urgent: urgent || false,
       })
       .select()
       .single();
@@ -1695,6 +1741,7 @@ function Dashboard({ user, onLogout }) {
       shade: shade || null,
       price_type: priceType || null,
       scanner: scanner || false,
+      urgent: urgent || false,
       note: note || null,
       uploaded_at: new Date().toISOString(),
     });
@@ -1719,6 +1766,8 @@ function Dashboard({ user, onLogout }) {
 
   const selected = index.find((c) => c.id === selectedId);
 
+  const scrollPosRef = React.useRef(0);
+
   const goHome = () => {
     setScreen("home");
     setSelectedId(null);
@@ -1730,9 +1779,17 @@ function Dashboard({ user, onLogout }) {
   };
 
   const openCase = (id) => {
+    scrollPosRef.current = window.scrollY;
     markCaseViewed(user.id, id);
     setSelectedId(id);
     setScreen("detail");
+  };
+
+  const backToStage = () => {
+    setScreen("stage");
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollPosRef.current, behavior: "auto" });
+    });
   };
 
   return (
@@ -1789,7 +1846,7 @@ function Dashboard({ user, onLogout }) {
           <CaseDetail
             caseItem={selected}
             user={user}
-            onBack={() => setScreen("stage")}
+            onBack={backToStage}
             onLoadStage={loadStage}
             onSaveStage={saveStage}
             onToggleDone={toggleDone}
