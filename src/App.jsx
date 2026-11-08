@@ -79,6 +79,9 @@ const STAGE_META = {
 
 const MAX_FILE_MB = 50;
 
+// الأونر (صاحب المعمل): هو الوحيد اللي يقبل أو يرفض طلبات الأدمن
+const OWNER_ID = "d4771e62-f96b-4ad1-b072-20f81a67a1ca";
+
 /* ---------------------------------------------------------------
    Helpers
 --------------------------------------------------------------- */
@@ -232,7 +235,8 @@ function LoginScreen() {
           const { error: profileError } = await supabase.from("profiles").insert({
             id: data.user.id,
             name: normalizeDisplayName(username),
-            role,
+            role: "user",
+            admin_status: role === "admin" ? "pending" : "none",
           });
           if (profileError) throw profileError;
           // onAuthStateChange in App will pick up the session and load the profile
@@ -348,7 +352,7 @@ function LoginScreen() {
                 >
                   <ShieldCheck size={20} color="#1F5C57" />
                   <div className="mt-2 text-sm font-semibold text-[#22302E]">أدمن المعمل</div>
-                  <div className="text-xs text-[#6B7674]">أدير كل الحالات</div>
+                  <div className="text-xs text-[#6B7674]">بعد موافقة صاحب المعمل</div>
                 </button>
               </div>
             </>
@@ -1511,6 +1515,125 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
    لوحة التحكم
 --------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------
+   طلبات الأدمن (للأونر فقط)
+--------------------------------------------------------------- */
+
+function AdminRequestsScreen({ onBack, onChanged }) {
+  const [requests, setRequests] = useState([]);
+  const [admins, setAdmins] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data, error: err } = await supabase
+      .from("profiles")
+      .select("id, name, created_at")
+      .eq("admin_status", "pending")
+      .order("created_at", { ascending: true });
+    if (err) setError(err.message);
+    setRequests(data || []);
+    const { data: adminRows } = await supabase
+      .from("profiles")
+      .select("id, name")
+      .eq("role", "admin")
+      .neq("id", OWNER_ID)
+      .order("name", { ascending: true });
+    setAdmins(adminRows || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const decide = async (id, approve) => {
+    setBusyId(id);
+    setError("");
+    const patch = approve ? { role: "admin", admin_status: "approved" } : { admin_status: "rejected" };
+    const { error: err } = await supabase.from("profiles").update(patch).eq("id", id);
+    if (err) setError(err.message);
+    await load();
+    onChanged && onChanged();
+    setBusyId(null);
+  };
+
+  const removeAdmin = async (id, name) => {
+    if (!window.confirm(`تشيل صلاحية الأدمن من ${name}؟ هيبقى مستخدم عادي.`)) return;
+    setBusyId(id);
+    setError("");
+    const { error: err } = await supabase.from("profiles").update({ role: "user", admin_status: "none" }).eq("id", id);
+    if (err) setError(err.message);
+    await load();
+    setBusyId(null);
+  };
+
+  return (
+    <div>
+      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-[#6B7674] mb-4">
+        <ArrowRight size={16} /> رجوع
+      </button>
+      <h2 className="text-lg font-bold text-[#22302E] mb-4">طلبات الأدمن</h2>
+      {error && <p className="text-xs text-[#B1503F] mb-3">{error}</p>}
+      {loading ? (
+        <Loader2 className="animate-spin" size={22} color="#1F5C57" />
+      ) : requests.length === 0 ? (
+        <EmptyState text="مفيش طلبات معلّقة" />
+      ) : (
+        <div className="space-y-3">
+          {requests.map((r) => (
+            <div key={r.id} className="bg-white rounded-xl border border-[#EFEBE2] p-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[#22302E]" style={{ direction: "ltr" }}>{r.name}</p>
+                <p className="text-[11px] text-[#9AA29F]">{formatDateTime(r.created_at)}</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  disabled={busyId === r.id}
+                  onClick={() => decide(r.id, true)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+                  style={{ background: "#1F5C57" }}
+                >
+                  قبول
+                </button>
+                <button
+                  disabled={busyId === r.id}
+                  onClick={() => decide(r.id, false)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#B1503F] border border-[#E4E0D8]"
+                >
+                  رفض
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h2 className="text-lg font-bold text-[#22302E] mt-8 mb-4">الأدمن الحاليين</h2>
+      {!loading && admins.length === 0 ? (
+        <EmptyState text="مفيش أدمن غيرك" />
+      ) : (
+        <div className="space-y-3">
+          {admins.map((a) => (
+            <div key={a.id} className="bg-white rounded-xl border border-[#EFEBE2] p-4 flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-[#22302E]" style={{ direction: "ltr" }}>{a.name}</p>
+              <button
+                disabled={busyId === a.id}
+                onClick={() => removeAdmin(a.id, a.name)}
+                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#B1503F] border border-[#E4E0D8]"
+              >
+                شيل الأدمن
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Dashboard({ user, onLogout }) {
   const [index, setIndex] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1521,6 +1644,34 @@ function Dashboard({ user, onLogout }) {
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState("done"); // 'done' | 'date'
   const [toast, setToast] = useState(null);
+  const isOwner = user.id === OWNER_ID;
+  const [myStatus, setMyStatus] = useState(user.adminStatus || "none");
+  const [requesting, setRequesting] = useState(false);
+
+  const requestAdmin = async () => {
+    setRequesting(true);
+    const { error: err } = await supabase.from("profiles").update({ admin_status: "pending" }).eq("id", user.id);
+    if (err) setToast(err.message);
+    else setMyStatus("pending");
+    setRequesting(false);
+  };
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const loadPendingCount = useCallback(async () => {
+    if (!isOwner) return;
+    const { count } = await supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("admin_status", "pending");
+    setPendingCount(count || 0);
+  }, [isOwner]);
+
+  useEffect(() => {
+    loadPendingCount();
+    if (!isOwner) return;
+    const t = setInterval(loadPendingCount, 30000);
+    return () => clearInterval(t);
+  }, [isOwner, loadPendingCount]);
   const indexRef = React.useRef(index);
   const selectedIdRef = React.useRef(selectedId);
   indexRef.current = index;
@@ -1815,13 +1966,48 @@ function Dashboard({ user, onLogout }) {
               </p>
             </div>
           </button>
+          <div className="flex items-center gap-4">
+          {isOwner && (
+            <button onClick={() => setScreen("requests")} className="relative flex items-center gap-1.5 text-xs text-[#1F5C57] font-semibold">
+              <Bell size={16} /> طلبات الأدمن
+              {pendingCount > 0 && (
+                <span className="absolute -top-2 -left-3 min-w-[18px] h-[18px] px-1 rounded-full bg-[#B1503F] text-white text-[10px] flex items-center justify-center">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          )}
           <button onClick={onLogout} className="flex items-center gap-1.5 text-xs text-[#6B7674] hover:text-[#B1503F]">
             <LogOut size={14} /> خروج
           </button>
+          </div>
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-5 py-6">
+        {user.role !== "admin" && (myStatus === "none" || myStatus === "rejected") && (
+          <div className="mb-4 rounded-lg px-4 py-3 flex items-center justify-between gap-3" style={{ background: "#EEF2F6" }}>
+            <span className="text-xs text-[#4A6A8A]">
+              {myStatus === "rejected" ? "طلب الأدمن اترفض. تقدر تبعت طلب تاني." : "عايز صلاحية أدمن؟ ابعت طلب لصاحب المعمل."}
+            </span>
+            <button
+              disabled={requesting}
+              onClick={requestAdmin}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+              style={{ background: "#1F5C57" }}
+            >
+              اطلب أدمن
+            </button>
+          </div>
+        )}
+        {myStatus === "pending" && user.role !== "admin" && (
+          <div className="mb-4 rounded-lg px-4 py-3 text-xs" style={{ background: "#FBF3E4", color: "#8B6A25" }}>
+            طلبك لصلاحية الأدمن قيد المراجعة من صاحب المعمل. هتفضل مستخدم عادي لحد ما يوافق.
+          </div>
+        )}
+        {screen === "requests" && isOwner && (
+          <AdminRequestsScreen onBack={goHome} onChanged={loadPendingCount} />
+        )}
         {screen === "home" && <StageHome user={user} index={index} onSelectStage={goStage} />}
 
         {screen === "stage" && (
@@ -1886,7 +2072,7 @@ export default function App() {
     setProfileLoading(true);
     const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
     if (!error && data) {
-      setProfile({ id: data.id, name: data.name, role: data.role });
+      setProfile({ id: data.id, name: data.name, role: data.role, adminStatus: data.admin_status || "none" });
     } else {
       setProfile(null);
     }
