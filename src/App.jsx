@@ -34,32 +34,35 @@ const SHADES = [
   "D2", "D3", "D4",
 ];
 
-const PRICE_LIST = {
-  "Remake": 0,
-  "XT": 350,
-  "Mono": 450,
-  "Multi": 650,
-  "Zolid": 800,
-  "Emax": 1600,
-  "Bar": 250,
-  "DSD + model": 550,
-  "Post": 200,
-  "Veneer": 1800,
-  "Night Guard": 150,
-  "Zolid Ultra": 850,
-  "Custome Abutment": 950,
-  "PMMA Printed": 100,
-  "PMMA Milled": 150,
-  "models": 300,
-  "Jig": 1000,
-  "fath": 200,
-  "milled titanium bar": 850,
-  "Design": 50,
-  "Snap on": 1000,
-  "ingivectomy": 400,
-  "Scanner": 200,
-};
-const PRICE_TYPES = Object.keys(PRICE_LIST);
+// الأسعار مش مكتوبة هنا خالص: بتتحمّل من جدول price_list في Supabase للأدمن بس
+// (المستخدم العادي الداتا بيز بترفض تديله الأسعار، فمستحيل توصل لمتصفحه)
+const PRICE_LIST = {};
+const PRICE_TYPES = [
+  "Remake",
+  "XT",
+  "Mono",
+  "Multi",
+  "Zolid",
+  "Emax",
+  "Bar",
+  "DSD + model",
+  "Post",
+  "Veneer",
+  "Night Guard",
+  "Zolid Ultra",
+  "Custome Abutment",
+  "PMMA Printed",
+  "PMMA Milled",
+  "models",
+  "Jig",
+  "fath",
+  "milled titanium bar",
+  "Design",
+  "Snap on",
+  "ingivectomy",
+  "Scanner",
+];
+const scannerAddon = () => PRICE_LIST["Scanner Addon"] || 0;
 const USER_VISIBLE_PRICE_TYPES = ["XT", "Mono", "Multi", "Zolid", "Zolid Ultra", "PMMA Milled", "Remake", "fath"];
 
 const PRICE_TYPE_COLORS = {
@@ -1064,7 +1067,7 @@ function CaseDetail({ caseItem, user, onBack, onLoadStage, onSaveStage, onToggle
             <DataRow label="Patient" value={record.caseName} />
             {record.crownCount != null && <DataRow label="N.O.C." value={record.crownCount} />}
             {record.shade && <DataRow label="Shade" value={record.shade} />}
-            {record.priceType && <DataRow label="Price" value={`${record.priceType} — ${PRICE_LIST[record.priceType] || 0} × ${record.crownCount || 0} = ${(PRICE_LIST[record.priceType] || 0) * (record.crownCount || 0)}`} />}
+            {role === "admin" && record.priceType && <DataRow label="Price" value={`${record.priceType} — ${PRICE_LIST[record.priceType] || 0} × ${record.crownCount || 0} = ${(PRICE_LIST[record.priceType] || 0) * (record.crownCount || 0)}`} />}
             {record.note && <DataRow label="Note" value={record.note} />}
             <DataRow label="تاريخ الرفع" value={formatDateTime(record.uploadedAt)} />
             {record.files.length === 0 ? (
@@ -1156,6 +1159,133 @@ function FileDropZone({ files, onAdd, onRemove, placeholder = "Choose or drop fi
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------
+   جدول الحالات — كل البيانات ظاهرة من غير ما تفتح الحالة
+--------------------------------------------------------------- */
+
+function CaseTable({ cases, isAdmin, viewedIds, onOpen, onDownload, onToggleDone }) {
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  const totalCrowns = cases.reduce((sum, c) => sum + (c.crownCount || 0), 0);
+  const byType = {};
+  cases.forEach((c) => {
+    if (c.priceType) byType[c.priceType] = (byType[c.priceType] || 0) + (c.crownCount || 0);
+  });
+
+  const download = async (e, c) => {
+    e.stopPropagation();
+    if (downloadingId) return;
+    setDownloadingId(c.id);
+    try {
+      await onDownload(c.id, c.stage);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  return (
+    <div>
+      {/* شريط الإجماليات */}
+      <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+        <span className="rounded-full px-3 py-1 font-semibold text-white" style={{ background: "#1F5C57" }}>
+          {cases.length} حالة
+        </span>
+        <span className="rounded-full px-3 py-1 font-semibold bg-white border border-[#E4E0D8] text-[#22302E]">
+          {totalCrowns} كراون
+        </span>
+        {Object.entries(byType).map(([t, n]) => (
+          <span key={t} className="rounded-full px-3 py-1 font-semibold bg-white border border-[#E4E0D8] text-[#6B7674]">
+            {t}: {n}
+          </span>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-[#EFEBE2] bg-white">
+        <table className="w-full text-xs border-collapse" style={{ minWidth: 760 }}>
+          <thead>
+            <tr className="text-[#6B7674] bg-[#F6F3EE] border-b border-[#EFEBE2]">
+              <th className="text-right py-2 px-3 font-semibold">Doctor</th>
+              <th className="text-right py-2 px-3 font-semibold">Patient</th>
+              <th className="text-right py-2 px-3 font-semibold">N.O.C.</th>
+              <th className="text-right py-2 px-3 font-semibold">Shade</th>
+              <th className="text-right py-2 px-3 font-semibold">النوع</th>
+              {isAdmin && <th className="text-right py-2 px-3 font-semibold">سعر الكراون</th>}
+              {isAdmin && <th className="text-right py-2 px-3 font-semibold">الإجمالي</th>}
+              <th className="text-right py-2 px-3 font-semibold">Note</th>
+              <th className="text-right py-2 px-3 font-semibold">التاريخ</th>
+              <th className="py-2 px-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {cases.map((c) => {
+              const priceColor = c.priceType ? PRICE_TYPE_COLORS[c.priceType] : null;
+              const isNew = !viewedIds.has(c.id);
+              const price = PRICE_LIST[c.priceType] || 0;
+              const crowns = c.crownCount || 0;
+              const total = price * crowns + (c.scanner ? scannerAddon() * crowns : 0);
+              return (
+                <tr
+                  key={c.id}
+                  onClick={() => onOpen(c.id)}
+                  className="border-b border-[#F3F1EC] cursor-pointer hover:bg-[#F6F3EE] align-top"
+                  style={{
+                    background: c.urgent ? "#FBEDEA" : priceColor ? priceColor.bg : undefined,
+                    opacity: c.done ? 0.6 : 1,
+                  }}
+                >
+                  <td className="py-2.5 px-3 text-[#22302E] font-semibold whitespace-nowrap">
+                    {isNew && <span className="inline-block w-1.5 h-1.5 rounded-full ml-1.5 align-middle" style={{ background: "#1F5C57" }} />}
+                    {c.starred && <Star size={11} color="#C6963E" fill="#C6963E" className="inline ml-1" />}
+                    {c.urgent && <span className="inline-block ml-1 text-[#C0392B] font-bold">!</span>}
+                    {c.doctorName}
+                  </td>
+                  <td className="py-2.5 px-3 text-[#22302E]">{c.caseName}</td>
+                  <td className="py-2.5 px-3 text-[#22302E] font-semibold">{c.crownCount ?? "—"}</td>
+                  <td className="py-2.5 px-3 text-[#22302E]">{c.shade || "—"}</td>
+                  <td className="py-2.5 px-3 whitespace-nowrap" style={{ color: priceColor ? priceColor.text : "#22302E", fontWeight: priceColor ? 600 : 400 }}>
+                    {c.priceType || "—"}
+                    {c.scanner && <span className="mr-1 text-[#7C4DBF]">+ Scanner</span>}
+                  </td>
+                  {isAdmin && <td className="py-2.5 px-3 text-[#22302E]">{c.priceType ? price : "—"}</td>}
+                  {isAdmin && <td className="py-2.5 px-3 text-[#22302E] font-semibold">{c.priceType ? total : "—"}</td>}
+                  <td className="py-2.5 px-3 text-[#6B7674]" style={{ maxWidth: 220, whiteSpace: "normal" }}>{c.note || "—"}</td>
+                  <td className="py-2.5 px-3 text-[#9AA29F] whitespace-nowrap">{formatDate(c.createdAt)}</td>
+                  <td className="py-2.5 px-3 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5">
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleDone(c.id, !c.done);
+                          }}
+                          title={c.done ? "تمت" : "علّم كـ تمت"}
+                          className="rounded-md p-1"
+                          style={{ color: c.done ? "#3F7A56" : "#9AA29F", background: c.done ? "#E7F2EA" : "#F3F1EC" }}
+                        >
+                          <CheckCircle2 size={14} />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => download(e, c)}
+                        disabled={downloadingId === c.id}
+                        title="Download"
+                        className="rounded-md p-1 disabled:opacity-40"
+                        style={{ color: "#1F5C57", background: "#E7F0EE" }}
+                      >
+                        {downloadingId === c.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -1308,7 +1438,7 @@ function StageHome({ user, index, onSelectStage }) {
    ليستة حالات مرحلة معيّنة
 --------------------------------------------------------------- */
 
-function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase, onDownload, sortMode, setSortMode }) {
+function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase, onDownload, onToggleDone, sortMode, setSortMode }) {
   const meta = STAGE_META[stage];
   const isAdminFinal = user.role === "admin" && stage === "final";
   const viewedIds = useMemo(() => getViewedCaseIds(user.id), [user.id, index]);
@@ -1358,7 +1488,7 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
         const price = PRICE_LIST[c.priceType] || 0;
         const crowns = c.crownCount || 0;
         const scanner = !!c.scanner;
-        const scannerTotal = scanner ? 50 * crowns : 0;
+        const scannerTotal = scanner ? scannerAddon() * crowns : 0;
         return { id: c.id, caseName: c.caseName, crownCount: crowns, price, scanner, scannerTotal, total: price * crowns + scannerTotal };
       });
   }, [monthCases, reportDoctor]);
@@ -1494,18 +1624,14 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
           </p>
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 gap-3">
-          {visibleCases.map((c) => (
-            <CaseCard
-              key={c.id}
-              item={c}
-              onOpen={() => onOpenCase(c.id)}
-              onDownload={onDownload}
-              showDoctor
-              isNew={!viewedIds.has(c.id)}
-            />
-          ))}
-        </div>
+        <CaseTable
+          cases={visibleCases}
+          isAdmin={user.role === "admin"}
+          viewedIds={viewedIds}
+          onOpen={onOpenCase}
+          onDownload={onDownload}
+          onToggleDone={onToggleDone}
+        />
       )}
     </div>
   );
@@ -1666,6 +1792,20 @@ function Dashboard({ user, onLogout }) {
     setPendingCount(count || 0);
   }, [isOwner]);
 
+  const [, setPricesReady] = useState(false);
+  useEffect(() => {
+    if (user.role !== "admin") return;
+    supabase
+      .from("price_list")
+      .select("type, price")
+      .then(({ data }) => {
+        (data || []).forEach((r) => {
+          PRICE_LIST[r.type] = Number(r.price);
+        });
+        setPricesReady(true);
+      });
+  }, [user.role]);
+
   useEffect(() => {
     loadPendingCount();
     if (!isOwner) return;
@@ -1687,7 +1827,14 @@ function Dashboard({ user, onLogout }) {
       .order("created_at", { ascending: false });
     let mapped = [];
     if (!error && data) {
+      const { data: stageRows } = await supabase.from("case_stage_files").select("case_id, stage, shade, note");
+      const stageMap = {};
+      (stageRows || []).forEach((r) => {
+        stageMap[`${r.case_id}:${r.stage}`] = r;
+      });
       mapped = data.map((c) => ({
+        shade: stageMap[`${c.id}:${c.stage}`]?.shade || "",
+        note: stageMap[`${c.id}:${c.stage}`]?.note || "",
         id: c.id,
         stage: c.stage,
         doctorName: c.doctor_name,
@@ -2020,6 +2167,7 @@ function Dashboard({ user, onLogout }) {
             onOpenCase={openCase}
             onNewCase={() => setShowNewCase(true)}
             onDownload={downloadFile}
+            onToggleDone={toggleDone}
             onLoadStage={loadStage}
             search={search}
             setSearch={setSearch}
