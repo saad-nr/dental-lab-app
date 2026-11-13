@@ -62,6 +62,17 @@ const PRICE_TYPES = [
   "ingivectomy",
   "Scanner",
 ];
+// أنواع مش بتتحسب في عدد الكراونات
+const NON_CROWN_TYPES = ["Bar", "Scanner", "Custome Abutment", "DSD + model", "models", "Night Guard", "Post", "Remake"];
+const countsAsCrown = (type) => !NON_CROWN_TYPES.includes(type);
+const sumCrowns = (list) => list.reduce((sum, c) => sum + (countsAsCrown(c.priceType) ? c.crownCount || 0 : 0), 0);
+const sumByType = (list) => {
+  const out = {};
+  list.forEach((c) => {
+    if (c.priceType) out[c.priceType] = (out[c.priceType] || 0) + (c.crownCount || 0);
+  });
+  return out;
+};
 const scannerAddon = () => PRICE_LIST["Scanner Addon"] || 0;
 const USER_VISIBLE_PRICE_TYPES = ["XT", "Mono", "Multi", "Zolid", "Zolid Ultra", "PMMA Milled", "Remake", "fath"];
 
@@ -1167,14 +1178,11 @@ function FileDropZone({ files, onAdd, onRemove, placeholder = "Choose or drop fi
    جدول الحالات — كل البيانات ظاهرة من غير ما تفتح الحالة
 --------------------------------------------------------------- */
 
-function CaseTable({ cases, isAdmin, viewedIds, onOpen, onDownload, onToggleDone }) {
+function CaseTable({ cases, isAdmin, showTotals = true, viewedIds, onOpen, onDownload, onToggleDone }) {
   const [downloadingId, setDownloadingId] = useState(null);
 
-  const totalCrowns = cases.reduce((sum, c) => sum + (c.crownCount || 0), 0);
-  const byType = {};
-  cases.forEach((c) => {
-    if (c.priceType) byType[c.priceType] = (byType[c.priceType] || 0) + (c.crownCount || 0);
-  });
+  const totalCrowns = sumCrowns(cases);
+  const byType = sumByType(cases);
 
   const download = async (e, c) => {
     e.stopPropagation();
@@ -1190,6 +1198,7 @@ function CaseTable({ cases, isAdmin, viewedIds, onOpen, onDownload, onToggleDone
   return (
     <div>
       {/* شريط الإجماليات */}
+      {showTotals && (
       <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
         <span className="rounded-full px-3 py-1 font-semibold text-white" style={{ background: "#1F5C57" }}>
           {cases.length} حالة
@@ -1203,6 +1212,7 @@ function CaseTable({ cases, isAdmin, viewedIds, onOpen, onDownload, onToggleDone
           </span>
         ))}
       </div>
+      )}
 
       <div className="overflow-x-auto rounded-xl border border-[#EFEBE2] bg-white">
         <table className="w-full text-xs border-collapse" style={{ minWidth: 760 }}>
@@ -1493,6 +1503,9 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
       });
   }, [monthCases, reportDoctor]);
 
+  const monthCrowns = useMemo(() => sumCrowns(monthCases), [monthCases]);
+  const monthByType = useMemo(() => sumByType(monthCases), [monthCases]);
+
   const grandTotal = doctorRows.reduce((sum, r) => sum + r.total, 0);
 
   return (
@@ -1548,6 +1561,22 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
             onChange={(e) => setReportMonth(e.target.value)}
             className="rounded-lg border border-[#E4E0D8] bg-white px-3 py-2 text-sm outline-none focus:border-[#1F5C57] mb-3"
           />
+
+          {reportMonth && monthCases.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+              <span className="rounded-full px-3 py-1 font-semibold text-white" style={{ background: "#1F5C57" }}>
+                {monthCrowns} كراون
+              </span>
+              <span className="rounded-full px-3 py-1 font-semibold bg-white border border-[#E4E0D8] text-[#22302E]">
+                {monthCases.length} حالة
+              </span>
+              {Object.entries(monthByType).map(([t, n]) => (
+                <span key={t} className="rounded-full px-3 py-1 font-semibold bg-white border border-[#E4E0D8] text-[#6B7674]">
+                  {t}: {n}
+                </span>
+              ))}
+            </div>
+          )}
 
           {reportMonth &&
             (doctorsInMonth.length === 0 ? (
@@ -1627,6 +1656,7 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
         <CaseTable
           cases={visibleCases}
           isAdmin={user.role === "admin"}
+          showTotals={!(stage === "final" && user.role !== "admin")}
           viewedIds={viewedIds}
           onOpen={onOpenCase}
           onDownload={onDownload}
