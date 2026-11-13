@@ -681,7 +681,7 @@ function NewCaseForm({ onCreated, onClose, doctorSuggestions }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" dir="rtl">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-5" style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5" style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif", maxHeight: "90vh", overflowY: "auto" }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-[#22302E]">حالة جديدة</h3>
           <button onClick={onClose}>
@@ -812,7 +812,7 @@ function AdminNewCaseForm({ stage, onCreated, onClose, doctorSuggestions }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" dir="rtl">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-5" style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5" style={{ fontFamily: "'IBM Plex Sans Arabic', sans-serif", maxHeight: "90vh", overflowY: "auto" }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-[#22302E]">حالة جديدة</h3>
           <button onClick={onClose}>
@@ -1214,9 +1214,9 @@ function CaseTable({ cases, isAdmin, showTotals = true, viewedIds, onOpen, onDow
       </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-[#EFEBE2] bg-white">
+      <div className="overflow-auto rounded-xl border border-[#EFEBE2] bg-white" style={{ maxHeight: "70vh" }}>
         <table className="w-full text-xs border-collapse" style={{ minWidth: 760 }}>
-          <thead>
+          <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
             <tr className="text-[#6B7674] bg-[#F6F3EE] border-b border-[#EFEBE2]">
               <th className="text-right py-2 px-3 font-semibold">Doctor</th>
               <th className="text-right py-2 px-3 font-semibold">Patient</th>
@@ -1227,7 +1227,7 @@ function CaseTable({ cases, isAdmin, showTotals = true, viewedIds, onOpen, onDow
               {isAdmin && <th className="text-right py-2 px-3 font-semibold">الإجمالي</th>}
               <th className="text-right py-2 px-3 font-semibold">Note</th>
               <th className="text-right py-2 px-3 font-semibold">التاريخ</th>
-              <th className="py-2 px-3" />
+              <th className="py-2 px-3" style={{ position: "sticky", left: 0, background: "#F6F3EE", zIndex: 3 }} />
             </tr>
           </thead>
           <tbody>
@@ -1264,7 +1264,10 @@ function CaseTable({ cases, isAdmin, showTotals = true, viewedIds, onOpen, onDow
                   {isAdmin && <td className="py-2.5 px-3 text-[#22302E] font-semibold">{c.priceType ? total : "—"}</td>}
                   <td className="py-2.5 px-3 text-[#6B7674]" style={{ maxWidth: 220, whiteSpace: "normal" }}>{c.note || "—"}</td>
                   <td className="py-2.5 px-3 text-[#9AA29F] whitespace-nowrap">{formatDate(c.createdAt)}</td>
-                  <td className="py-2.5 px-3 whitespace-nowrap">
+                  <td
+                    className="py-2.5 px-3 whitespace-nowrap"
+                    style={{ position: "sticky", left: 0, zIndex: 1, background: c.urgent ? "#FBEDEA" : priceColor ? priceColor.bg : "#fff", boxShadow: "2px 0 4px rgba(0,0,0,0.06)" }}
+                  >
                     <div className="flex items-center gap-1.5">
                       {isAdmin && (
                         <button
@@ -1641,6 +1644,8 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
         </div>
       )}
 
+      {isAdminFinal && <CleanFilesCard />}
+
       {loading ? (
         <div className="flex items-center justify-center h-40 text-[#9AA29F]">
           <Loader2 className="animate-spin" size={20} />
@@ -1674,6 +1679,123 @@ function StageList({ user, stage, index, loading, onBack, onOpenCase, onNewCase,
 /* ---------------------------------------------------------------
    طلبات الأدمن (للأونر فقط)
 --------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------
+   مسح ملفات شهر (للأونر فقط) — بيمسح الملفات بس، بيانات الحالات بتفضل
+--------------------------------------------------------------- */
+
+function CleanFilesCard() {
+  const [month, setMonth] = useState("");
+  const [files, setFiles] = useState(null); // null = لسه ما اتحسبش
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const chunk = (arr, n) => {
+    const out = [];
+    for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+    return out;
+  };
+
+  const countFiles = async () => {
+    if (!month) return;
+    setBusy(true);
+    setMsg("");
+    setFiles(null);
+    const [y, m] = month.split("-").map(Number);
+    const start = `${month}-01T00:00:00Z`;
+    const end = new Date(Date.UTC(y, m, 1)).toISOString(); // أول الشهر اللي بعده
+    const { data: cs, error: e1 } = await supabase.from("cases").select("id").gte("created_at", start).lt("created_at", end);
+    if (e1) {
+      setMsg(e1.message);
+      setBusy(false);
+      return;
+    }
+    const ids = (cs || []).map((c) => c.id);
+    let rows = [];
+    for (const part of chunk(ids, 100)) {
+      const { data, error: e2 } = await supabase.from("case_files").select("id, file_path").in("case_id", part);
+      if (e2) {
+        setMsg(e2.message);
+        setBusy(false);
+        return;
+      }
+      rows = rows.concat(data || []);
+    }
+    setFiles(rows);
+    setBusy(false);
+  };
+
+  const deleteFiles = async () => {
+    if (!files || files.length === 0) return;
+    if (!window.confirm(`هتمسح ${files.length} ملف نهائيًا من شهر ${month}. بيانات الحالات هتفضل. متأكد؟`)) return;
+    setBusy(true);
+    setMsg("");
+    const paths = files.map((f) => f.file_path).filter(Boolean);
+    for (const part of chunk(paths, 100)) {
+      const { error } = await supabase.storage.from(CASE_FILES_BUCKET).remove(part);
+      if (error) {
+        setMsg(error.message);
+        setBusy(false);
+        return;
+      }
+    }
+    for (const part of chunk(files.map((f) => f.id), 100)) {
+      const { error } = await supabase.from("case_files").delete().in("id", part);
+      if (error) {
+        setMsg(error.message);
+        setBusy(false);
+        return;
+      }
+    }
+    setMsg(`اتمسح ${files.length} ملف. بيانات الحالات زي ما هي.`);
+    setFiles(null);
+    setBusy(false);
+  };
+
+  return (
+    <div className="mb-5 rounded-xl border border-[#E4E0D8] bg-white p-4">
+      <h2 className="text-sm font-bold text-[#22302E] mb-1">مسح ملفات شهر</h2>
+      <p className="text-xs text-[#6B7674] mb-3">بيمسح الملفات المرفوعة بس. الدكتور والمريض والكراون والسعر وكل البيانات بتفضل.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="month"
+          value={month}
+          onChange={(e) => {
+            setMonth(e.target.value);
+            setFiles(null);
+            setMsg("");
+          }}
+          className="rounded-lg border border-[#E4E0D8] bg-white px-3 py-2 text-sm outline-none focus:border-[#1F5C57]"
+        />
+        <button
+          disabled={!month || busy}
+          onClick={countFiles}
+          className="rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+          style={{ background: "#1F5C57" }}
+        >
+          احسب الملفات
+        </button>
+      </div>
+      {busy && <Loader2 className="animate-spin mt-3" size={18} color="#1F5C57" />}
+      {files && (
+        <div className="mt-3 flex items-center gap-3">
+          <span className="text-sm text-[#22302E]">لقيت <b>{files.length}</b> ملف في الشهر ده</span>
+          {files.length > 0 && (
+            <button
+              disabled={busy}
+              onClick={deleteFiles}
+              className="rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+              style={{ background: "#B1503F" }}
+            >
+              امسح الملفات
+            </button>
+          )}
+        </div>
+      )}
+      {msg && <p className="text-xs mt-3 text-[#22302E]">{msg}</p>}
+    </div>
+  );
+}
 
 function AdminRequestsScreen({ onBack, onChanged }) {
   const [requests, setRequests] = useState([]);
